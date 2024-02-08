@@ -212,7 +212,6 @@ def check_url():
             print('Error in SAN for ' + str(domain))
 
 
-    result = []
     domain_list_tld_extract = []
 #    for domain1 in domain_list_with_san:
 #        domain_list_tld_extract.append(str(tldextract.extract(str(domain1)).registered_domain))
@@ -230,8 +229,9 @@ def check_url():
         print('Found in domain list')
         stopTime = time.time()
         main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime} with result not phishing")
-        result.append({'url': url, 'status': "not phishing", 'sha1': shahash})
         sessions.store_state(uuid, url, 'not phishing', '')
+
+        result = [{'url': url, 'status': "not phishing", 'sha1': shahash}]
         return jsonify(result)
     # no match, go on to image comparison per url
 
@@ -306,8 +306,9 @@ def check_url():
             driver.quit()
             stopTime = time.time()
             main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime} with result phishing")
-            result.append({'url': url, 'status': "phishing", 'sha1': shahash})
             sessions.store_state(uuid, url, 'phishing', '')
+            
+            result = [{'url': url, 'status': "phishing", 'sha1': shahash}]
             return jsonify(result)
         #otherwise go to next
     
@@ -325,7 +326,7 @@ def check_url():
     #   result: inconclusive_blocked
     
     main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime} with result inconclusive")
-    result.append({'url': url, 'status': "inconclusive", 'sha1': shahash})
+    result = [{'url': url, 'status': "inconclusive", 'sha1': shahash}]
     sessions.store_state(uuid, url, 'inconclusive', '')
     return jsonify(result)
 
@@ -334,9 +335,10 @@ def get_url_state():
     json = request.get_json()
     url = json["URL"]
     uuid = json["uuid"]
+    
     currStatus = sessions.get_state(uuid, url)
-    result = []
-    result.append({'status': currStatus[0], 'state': currStatus[1]})
+    
+    result = [{'status': currStatus[0], 'state': currStatus[1]}]
     return jsonify(result)
 
 
