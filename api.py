@@ -5,6 +5,7 @@ from collections import defaultdict
 import socket
 import ssl
 import tldextract
+from utils import domains
 
 from utils.customlogger import CustomLogger
 import time
@@ -20,7 +21,6 @@ from selenium.webdriver.chrome.options import Options
 import utils.classifiers as cl
 import joblib
 from utils.sessions import Sessions
-import utils.appendsandomains as appdom
 
 # To avoid RuntimeError('This event loop is already running') when there are many of requests
 import nest_asyncio
@@ -67,7 +67,7 @@ def home():
 def shutdown():
     shutdown_server()
     return 'Server shutting down...'
-    
+
 def shutdown_server():
     os._exit(0)
 
@@ -98,43 +98,58 @@ def check_url():
         main_logger.info("Not a phish URL, real URL")
 
     url_domain = urlparse(url).netloc
+    url_hash = hashlib.sha1(url.encode('utf-8')).hexdigest() # TODO: switch to better hash, cause SHA-1 broken?
 
-    url_hash = hashlib.sha1(url.encode('utf-8')).hexdigest()
+    session_file_path = os.path.join(SESSION_FILE_STORAGE_PATH, url_hash)
 
-    # check is in cache or still processing...
-    result = []
+    # Check if URL is in cache or still processing
     cache_result = sessions.get_state(uuid, url)
-    # main_logger.info("Is in cache?" + str(cache_result))
+    # main_logger.info(f"Request in cache: {cache_result}")
     if cache_result != 'new':
+        # Request is already in cache, use result from that (possibly waiting until it is finished)
         if cache_result[0] == 'processing':
-            time.sleep(4)
+            time.sleep(4) # TODO: oh god
+        
         stopTime = time.time()
-        main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime}, found in cache with result {cache_result[0]}")
-        result.append({'url': url, 'status': cache_result[0], 'sha1': url_hash})
+        main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime}s, found in cache with result {cache_result[0]}")
+        
+        result = [{'url': url, 'status': cache_result[0], 'sha1': url_hash}]
         return jsonify(result)
     
+    # Update the current state in the session storage
     sessions.store_state(uuid, url, 'processing', 'textsearch')
 
-    parse = Parsing(SAVE_SCREENSHOT_FILES, json=json, store="files/" + url_hash)
-    image_width, image_height = parse.get_size()
+    # Take screenshot of requested page
+    parsing = Parsing(SAVE_SCREENSHOT_FILES, json=json, store=session_file_path)
 
-    conn_storage = sqlite3.connect(DB_PATH_OUTPUT)
+    db_conn_output = sqlite3.connect(DB_PATH_OUTPUT)
 
-    ######
-    textFindST = time.time()
-    ######
+    # Perform text search of the screenshot
+    try: # timed
+        comp_start_time = time.time()
 
-    search = ReverseImageSearch(storage=DB_PATH_OUTPUT, search_engine=list(GoogleReverseImageSearchEngine().identifiers())[0], folder=SESSION_FILE_STORAGE_PATH, upload=False, mode="text", htmlsession=html_session, clf=logo_classifier)
-    search.handle_folder(os.path.join(SESSION_FILE_STORAGE_PATH, url_hash), url_hash)
-    url_list_text = conn_storage.execute("select distinct result from search_result_text WHERE filepath = ?", (url_hash,)).fetchall()
+        # Initiate text-only reverse image search instance
+        search = ReverseImageSearch(storage=DB_PATH_OUTPUT,
+                                    search_engine=list(GoogleReverseImageSearchEngine().identifiers())[0],
+                                    folder=SESSION_FILE_STORAGE_PATH,
+                                    upload=False,
+                                    mode="text",
+                                    htmlsession=html_session,
+                                    clf=logo_classifier)
+        
+        search.handle_folder(session_file_path, url_hash)
+        
+        # Get result from the above search
+        url_list_text = db_conn_output.execute("SELECT DISTINCT result FROM search_result_text WHERE filepath = ?", [url_hash]).fetchall()
+    finally:
+        comp_end_time = time.time()
+        comp_time_diff = comp_end_time - comp_start_time
+        main_logger.warn(f"Time elapsed for text find for {url_hash} is {comp_time_diff}s")
 
-    ######
-    textFindSPT = time.time()
-    main_logger.warn(f"Time elapsed for text find for {url_hash} is {textFindSPT - textFindST}")
+    
     sanTextST = time.time()
-    ######
 
-    domain_list=  []
+    domain_list = []
     for urls in url_list_text:
         url_domain = urlparse(urls[0]).netloc
         domain_list.append(url_domain)
@@ -144,44 +159,37 @@ def check_url():
     # Get SAN names and append
     for domain in domain_list:
         try:
-            context = ssl.create_default_context()
-            with socket.create_connection((domain, 443), timeout=2) as sock:
-                with context.wrap_socket(sock, server_hostname=domain) as ssock:
-                    cert = ssock.getpeercert()
-                    sAN = defaultdict(list)
-                    for type_, san in cert['subjectAltName']:
-                        sAN[type_].append(san)
-                    domain_list_with_san.append(sAN['DNS'])
+            domain_list_with_san.append(domains.get_san_names(domain))
         except:
             print('Error in SAN for ' + str(domain))
 
 
-    result = []
     domain_list_tld_extract = []
     # for domain1 in domain_list_with_san:
     #     domain_list_tld_extract.append(str(tldextract.extract(str(domain1)).registered_domain))
     # replaces the above
-    domain_list_tld_extract = appdom.append_domains_san_to_tld_extract(domain_list_with_san)
+    domain_list_tld_extract = domains.append_domains_san_to_tld_extract(domain_list_with_san)
 
     ######
     sanTextSPT = time.time()
-    main_logger.warn(f"Time elapsed for textSAN for {url_hash} is {sanTextSPT - sanTextST} for {len(domain_list)} domains")
+    main_logger.warn(f"Time elapsed for textSAN for {url_hash} is {sanTextSPT - sanTextST}s for {len(domain_list)} domains")
     ######
     #breakpoint()
     if (tldextract.extract(url_domain).registered_domain in domain_list_tld_extract):
         print('Found in domain list')
         stopTime = time.time()
-        main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime} with result not phishing")
-        result.append({'url': url, 'status': "not phishing", 'sha1': url_hash})
+        main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime}s with result not phishing")
         sessions.store_state(uuid, url, 'not phishing', '')
+        
+        result = [{'url': url, 'status': "not phishing", 'sha1': url_hash}]
         return jsonify(result)
 
     sessions.store_state(uuid, url, 'processing', 'imagesearch')
 
     search = ReverseImageSearch(storage=DB_PATH_OUTPUT, search_engine=list(GoogleReverseImageSearchEngine().identifiers())[0], folder=SESSION_FILE_STORAGE_PATH, upload=True, mode="image", htmlsession=html_session, clf=logo_classifier, clearbit=USE_CLEARBIT_LOGO_API, tld=tldextract.extract(url_domain).registered_domain)
-    search.handle_folder(os.path.join(SESSION_FILE_STORAGE_PATH, url_hash), url_hash)
+    search.handle_folder(session_file_path, url_hash)
     
-    url_list = conn_storage.execute("select distinct result from search_result_image WHERE filepath = ?", (url_hash,)).fetchall()
+    url_list = db_conn_output.execute("select distinct result from search_result_image WHERE filepath = ?", (url_hash,)).fetchall()
 
     ######
     sanImgST = time.time()
@@ -219,14 +227,14 @@ def check_url():
 
     ######
     sanImgSPT = time.time()
-    main_logger.warn(f"Time elapsed for imgSAN find for {url_hash} is {sanImgSPT - sanImgST}")
+    main_logger.warn(f"Time elapsed for imgSAN find for {url_hash} is {sanImgSPT - sanImgST}s")
     ######
 
     #breakpoint()
     if (tldextract.extract(url_domain).registered_domain in domain_list_tld_extract):
         print('Found in domain list')
         stopTime = time.time()
-        main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime} with result not phishing")
+        main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime}s with result not phishing")
         sessions.store_state(uuid, url, 'not phishing', '')
 
         result = [{'url': url, 'status': "not phishing", 'sha1': url_hash}]
@@ -251,6 +259,7 @@ def check_url():
     #driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
     # replaces the above with a fixed ChromeDriver
     driver = webdriver.Chrome(options=options)
+    image_width, image_height = parsing.get_size()
     driver.set_window_size(image_width, image_height)
     driver.set_page_load_timeout(WEB_DRIVER_TIMEOUT)
 
@@ -269,7 +278,7 @@ def check_url():
         driver.save_screenshot(out_dir + "/" + str(index) + '.png')
 
         # image compare
-        path_a = "files/" + url_hash + "/screen.png"
+        path_a = os.path.join(session_file_path, "screen.png")
         path_b = out_dir + "/" + str(index) + ".png"
         emd = None
         dct = None
@@ -303,7 +312,7 @@ def check_url():
         if ((emd < 0.001) and (s_sim > 0.70)) or ((emd < 0.002) and (s_sim > 0.80)):
             driver.quit()
             stopTime = time.time()
-            main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime} with result phishing")
+            main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime}s with result phishing")
             sessions.store_state(uuid, url, 'phishing', '')
             
             result = [{'url': url, 'status': "phishing", 'sha1': url_hash}]
@@ -312,7 +321,7 @@ def check_url():
     
     ######
     compareSPT = time.time()
-    main_logger.warn(f"Time elapsed for imgCompare find for {url_hash} is {compareSPT - compareST}")
+    main_logger.warn(f"Time elapsed for imgCompare find for {url_hash} is {compareSPT - compareST}s")
     ######
 
     driver.quit()
@@ -323,7 +332,7 @@ def check_url():
     #   e.g. blocked == True
     #   result: inconclusive_blocked
     
-    main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime} with result inconclusive")
+    main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime}s with result inconclusive")
     result = [{'url': url, 'status': "inconclusive", 'sha1': url_hash}]
     sessions.store_state(uuid, url, 'inconclusive', '')
     return jsonify(result)
