@@ -35,9 +35,12 @@ main_logger = CustomLogger().main_logger
 htmlsession = HTMLSession()
 htmlsession.browser
 
-clf_logo = joblib.load('saved-classifiers/gridsearch_clf_rt_recall.joblib')
-clientscreen = False	# don't save client screenshot
-clearbit = True # set clearbit API on
+logo_classifier = joblib.load('saved-classifiers/gridsearch_clf_rt_recall.joblib')
+
+# Option for saving the taken screenshots
+SAVE_SCREENSHOT_FILES = False
+# Whether to use the Clearbit logo API (see https://clearbit.com/logo)
+USE_CLEARBIT_LOGO_API = True
 
 def_folder = "files/"
 def_storage = "db/output_operational.db"
@@ -103,7 +106,7 @@ def check_url():
     
     sessions.store_state(uuid, url, 'processing', 'textsearch')
 
-    parse = Parsing(clientscreen, json=json, store="files/" + shahash)
+    parse = Parsing(SAVE_SCREENSHOT_FILES, json=json, store="files/" + shahash)
     image_width, image_height = parse.get_size()
 
     conn_storage = sqlite3.connect(def_storage)
@@ -112,7 +115,7 @@ def check_url():
     textFindST = time.time()
     ######
 
-    search = ReverseImageSearch(storage=def_storage, search_engine=list(GoogleReverseImageSearchEngine().identifiers())[0], folder=def_folder, upload=False, mode="text", htmlsession=htmlsession, clf=clf_logo)
+    search = ReverseImageSearch(storage=def_storage, search_engine=list(GoogleReverseImageSearchEngine().identifiers())[0], folder=def_folder, upload=False, mode="text", htmlsession=htmlsession, clf=logo_classifier)
     search.handle_folder(os.path.join(def_folder, shahash), shahash)
     url_list_text = conn_storage.execute("select distinct result from search_result_text WHERE filepath = ?", (shahash,)).fetchall()
 
@@ -166,7 +169,7 @@ def check_url():
 
     sessions.store_state(uuid, url, 'processing', 'imagesearch')
 
-    search = ReverseImageSearch(storage=def_storage, search_engine=list(GoogleReverseImageSearchEngine().identifiers())[0], folder=def_folder, upload=True, mode="image", htmlsession=htmlsession, clf=clf_logo, clearbit=clearbit, tld=tldextract.extract(urldomain).registered_domain)
+    search = ReverseImageSearch(storage=def_storage, search_engine=list(GoogleReverseImageSearchEngine().identifiers())[0], folder=def_folder, upload=True, mode="image", htmlsession=htmlsession, clf=logo_classifier, clearbit=USE_CLEARBIT_LOGO_API, tld=tldextract.extract(urldomain).registered_domain)
     search.handle_folder(os.path.join(def_folder, shahash), shahash)
     
     url_list = conn_storage.execute("select distinct result from search_result_image WHERE filepath = ?", (shahash,)).fetchall()

@@ -16,16 +16,16 @@ class Parsing():
     json = None
     clientscreen = None
 
-    def __init__(self, clientscreen, json, store):
+    def __init__(self, save_screenshots, json, store):
         self.json = json
         self.store = store
-        self.clientscreen = clientscreen
+        self.clientscreen = save_screenshots
 
         title = json['pagetitle']
         if not os.path.exists(store):
             os.makedirs(store)
 
-        if clientscreen:
+        if save_screenshots:
             st = len("data:image/png;base64,")
             image = bytes(json['image64'], 'ascii')
             image = image[st:]
