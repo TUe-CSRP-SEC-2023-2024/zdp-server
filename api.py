@@ -63,11 +63,12 @@ logo_classifier = joblib.load('saved-classifiers/gridsearch_clf_rt_recall.joblib
 app = Flask(__name__)
 app.config["DEBUG"] = False
 
-@app.route('/', methods=['GET'])
+
+@app.route('/')
 def home():
     return render_template('index.html')
 
-@app.route('/stop', methods=['GET'])
+@app.route('/stop')
 def shutdown():
     shutdown_server()
     return 'Server shutting down...'
@@ -338,74 +339,6 @@ def get_url_state():
     result.append({'status': currStatus[0], 'state': currStatus[1]})
     return jsonify(result)
 
-# test cases of the user study carried by seminar students
-@app.route('/pages/paypal/signin', methods=['GET'])
-def get_paypapl_signin():
-    return send_file('pages/paypal/signin.html')
-
-@app.route('/pages/paypal/success', methods=['GET'])
-def get_paypapl_success():
-    return send_file('pages/paypal/success.html')
-
-@app.route('/pages/digid/signin', methods=['GET'])
-def get_digid_signin():
-    return send_file('pages/digid/signin.html')
-
-@app.route('/pages/digid/signincss', methods=['GET'])
-def get_digid_signincss():
-    return send_file('pages/digid/digid_css.css')
-
-@app.route('/pages/digid/success', methods=['GET'])
-def get_digid_success():
-    return send_file('pages/digid/success.html')
-
-@app.route('/pages/immobiliare/signin', methods=['GET'])
-def get_immo_signin():
-    return send_file('pages/immobiliare/signin.html')
-
-@app.route('/pages/immobiliare/success', methods=['GET'])
-def get_immo_success():
-    return send_file('pages/immobiliare/success.html')
-
-@app.route('/pages/olx/signin', methods=['GET'])
-def get_olx_signin():
-    return send_file('pages/olx/signin.html')
-
-@app.route('/pages/olx/success', methods=['GET'])
-def get_olx_success():
-    return send_file('pages/olx/success.html')
-
-@app.route('/pages/etos/signin', methods=['GET'])
-def get_etos_signin():
-    return send_file('pages/etos/signin.html')
-
-@app.route('/pages/etos/success', methods=['GET'])
-def get_etos_success():
-    return send_file('pages/etos/success.html')
-
-@app.route('/pages/mediamarkt/signin', methods=['GET'])
-def get_mediamarkt_signin():
-    return send_file('pages/mediamarkt/signin.html')
-
-@app.route('/pages/mediamarkt/success', methods=['GET'])
-def get_mediamarkt_success():
-    return send_file('pages/mediamarkt/success.html')
-
-@app.route('/pages/coutinho/signin', methods=['GET'])
-def get_coutinho_signin():
-    return send_file('pages/coutinho/signin.html')
-
-@app.route('/pages/coutinho/success', methods=['GET'])
-def get_coutinho_success():
-    return send_file('pages/coutinho/success.html')
-
-@app.route('/pages/idealista/signin', methods=['GET'])
-def get_idealista_signin():
-    return send_file('pages/idealista/signin.html')
-
-@app.route('/pages/idealista/success', methods=['GET'])
-def get_idealista_success():
-    return send_file('pages/idealista/success.html')
 
 # Using this lib to avoid runtimerror with many requests
 #__import__('IPython').embed()
@@ -416,10 +349,5 @@ def signal_handler(sig, frame):
     shutdown_server()
 signal.signal(signal.SIGINT, signal_handler)
 
+# Start Flask app, bind to all interfaces
 app.run(host="0.0.0.0")
-
-# used for local test with VM
-# app.run(host="192.168.56.100")
-
-
-
