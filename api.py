@@ -1,27 +1,21 @@
 from requests_html import HTMLSession
-from flask import Flask, request, jsonify, send_file, send_from_directory, render_template
+from flask import Flask, request, jsonify, render_template
 import hashlib
 from collections import defaultdict
 import socket
 import ssl
 import tldextract
 
-from webdriver_manager.chrome import ChromeDriver
 from utils.customlogger import CustomLogger
 import time
-from datetime import datetime
-import logging
 import os
-import searchengine
 import signal
 from parsing import Parsing
 from utils.reverseimagesearch import ReverseImageSearch
 from engines.google import GoogleReverseImageSearchEngine
-from engines.bing import BingReverseImageSearchEngine
 import sqlite3
 from urllib.parse import urlparse
 from selenium import webdriver
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.options import Options
 import utils.classifiers as cl
 import joblib
