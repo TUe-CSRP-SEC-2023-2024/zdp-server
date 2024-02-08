@@ -35,10 +35,10 @@ class Sessions():
             domain = tldextract.extract(url).registered_domain
             
             storage_conn.execute("INSERT INTO session (uuid, timestamp, url, tld, result, state) VALUES (?, ?, ?, ?, ?, ?)", 
-                                 uuid, now, url, domain, result, state)
+                                 [uuid, now, url, domain, result, state])
         else:
             storage_conn.execute("UPDATE session SET result = ?, timestamp = ?, state = ? WHERE uuid = ? AND url = ?", 
-                                 result, now, state, uuid, url)
+                                 [result, now, state, uuid, url])
         
         storage_conn.commit()
         storage_conn.close()
@@ -50,9 +50,9 @@ class Sessions():
         storage_conn = sqlite3.connect(self.storage)
         
         if self.shared:
-            cursor = storage_conn.execute("SELECT result, state, timestamp FROM session WHERE url = ?", url)
+            cursor = storage_conn.execute("SELECT result, state, timestamp FROM session WHERE url = ?", [url])
         else:
-            cursor = storage_conn.execute("SELECT result, state, timestamp FROM session WHERE uuid = ? AND url = ?", uuid, url)
+            cursor = storage_conn.execute("SELECT result, state, timestamp FROM session WHERE uuid = ? AND url = ?", [uuid, url])
         
         result = cursor.fetchone()
         storage_conn.close()
