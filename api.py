@@ -60,6 +60,7 @@ html_session.browser # TODO why is this here
 # The logo classifier, deserialized from file
 logo_classifier = joblib.load('saved-classifiers/gridsearch_clf_rt_recall.joblib')
 
+# Initiate Flask app
 app = Flask(__name__)
 app.config["DEBUG"] = False
 
@@ -74,50 +75,53 @@ def shutdown():
     return 'Server shutting down...'
     
 def shutdown_server():
-    # func = request.environ.get('werkzeug.server.shutdown')
-    # if func is None:
-    #     raise RuntimeError('Not running with the Werkzeug Server')
-    # func()
     os._exit(0)
 
 @app.route('/api/v1/url', methods=['POST'])
 def check_url():
     startTime = time.time()
     json = request.get_json()
-    #main_logger.info("Received JSON: " + str(json))
-    #main_logger.warn("Received JSON: " + str(json))
-    #main_logger.warn("Received JSON: " + str(json["URL"]))
+    
+    # main_logger.debug("Received JSON: " + str(json))
+    # main_logger.warn("Received JSON: " + str(json))
+    # main_logger.warn("Received JSON: " + str(json["URL"]))
+        
     url = json["URL"]
     uuid = json["uuid"]
-    main_logger.info("\n\n\n##########################################################\n##### Request received for URL:\t" + str(url) + "\n##########################################################")
+    main_logger.info(f'''
+
+##########################################################
+##### Request received for URL:\t{url}
+##########################################################
+''')
 
     # extra json field for evaluation purposes
     # the hash computed in the DB is the this one
     if "phish_url" in json:
         url = json["phishURL"]
-        main_logger.info("Real URL changed to phishURL: " + str(url) + "\n")
+        main_logger.info(f"Real URL changed to phishURL: {url}\n")
     else:
-        main_logger.info("Not a phish URL, real URL") # + str(phish_url)) 	
+        main_logger.info("Not a phish URL, real URL")
 
-    urldomain = urlparse(url).netloc
+    url_domain = urlparse(url).netloc
 
-    shahash = hashlib.sha1(url.encode('utf-8')).hexdigest()
+    url_hash = hashlib.sha1(url.encode('utf-8')).hexdigest()
 
     # check is in cache or still processing...
     result = []
     cache_result = sessions.get_state(uuid, url)
-#    main_logger.info("Is in cache?" + str(cache_result))
+    # main_logger.info("Is in cache?" + str(cache_result))
     if cache_result != 'new':
         if cache_result[0] == 'processing':
             time.sleep(4)
         stopTime = time.time()
         main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime}, found in cache with result {cache_result[0]}")
-        result.append({'url': url, 'status': cache_result[0], 'sha1': shahash})
+        result.append({'url': url, 'status': cache_result[0], 'sha1': url_hash})
         return jsonify(result)
     
     sessions.store_state(uuid, url, 'processing', 'textsearch')
 
-    parse = Parsing(SAVE_SCREENSHOT_FILES, json=json, store="files/" + shahash)
+    parse = Parsing(SAVE_SCREENSHOT_FILES, json=json, store="files/" + url_hash)
     image_width, image_height = parse.get_size()
 
     conn_storage = sqlite3.connect(DB_PATH_OUTPUT)
@@ -127,16 +131,16 @@ def check_url():
     ######
 
     search = ReverseImageSearch(storage=DB_PATH_OUTPUT, search_engine=list(GoogleReverseImageSearchEngine().identifiers())[0], folder=SESSION_FILE_STORAGE_PATH, upload=False, mode="text", htmlsession=html_session, clf=logo_classifier)
-    search.handle_folder(os.path.join(SESSION_FILE_STORAGE_PATH, shahash), shahash)
-    url_list_text = conn_storage.execute("select distinct result from search_result_text WHERE filepath = ?", (shahash,)).fetchall()
+    search.handle_folder(os.path.join(SESSION_FILE_STORAGE_PATH, url_hash), url_hash)
+    url_list_text = conn_storage.execute("select distinct result from search_result_text WHERE filepath = ?", (url_hash,)).fetchall()
 
     ######
     textFindSPT = time.time()
-    main_logger.warn(f"Time elapsed for text find for {shahash} is {textFindSPT - textFindST}")
+    main_logger.warn(f"Time elapsed for text find for {url_hash} is {textFindSPT - textFindST}")
     sanTextST = time.time()
     ######
 
-    domain_list=[]
+    domain_list=  []
     for urls in url_list_text:
         url_domain = urlparse(urls[0]).netloc
         domain_list.append(url_domain)
@@ -160,30 +164,30 @@ def check_url():
 
     result = []
     domain_list_tld_extract = []
-#    for domain1 in domain_list_with_san:
-#        domain_list_tld_extract.append(str(tldextract.extract(str(domain1)).registered_domain))
+    # for domain1 in domain_list_with_san:
+    #     domain_list_tld_extract.append(str(tldextract.extract(str(domain1)).registered_domain))
     # replaces the above
     domain_list_tld_extract = appdom.append_domains_san_to_tld_extract(domain_list_with_san)
 
     ######
     sanTextSPT = time.time()
-    main_logger.warn(f"Time elapsed for textSAN for {shahash} is {sanTextSPT - sanTextST} for {len(domain_list)} domains")
+    main_logger.warn(f"Time elapsed for textSAN for {url_hash} is {sanTextSPT - sanTextST} for {len(domain_list)} domains")
     ######
     #breakpoint()
-    if (tldextract.extract(urldomain).registered_domain in domain_list_tld_extract):
+    if (tldextract.extract(url_domain).registered_domain in domain_list_tld_extract):
         print('Found in domain list')
         stopTime = time.time()
         main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime} with result not phishing")
-        result.append({'url': url, 'status': "not phishing", 'sha1': shahash})
+        result.append({'url': url, 'status': "not phishing", 'sha1': url_hash})
         sessions.store_state(uuid, url, 'not phishing', '')
         return jsonify(result)
 
     sessions.store_state(uuid, url, 'processing', 'imagesearch')
 
-    search = ReverseImageSearch(storage=DB_PATH_OUTPUT, search_engine=list(GoogleReverseImageSearchEngine().identifiers())[0], folder=SESSION_FILE_STORAGE_PATH, upload=True, mode="image", htmlsession=html_session, clf=logo_classifier, clearbit=USE_CLEARBIT_LOGO_API, tld=tldextract.extract(urldomain).registered_domain)
-    search.handle_folder(os.path.join(SESSION_FILE_STORAGE_PATH, shahash), shahash)
+    search = ReverseImageSearch(storage=DB_PATH_OUTPUT, search_engine=list(GoogleReverseImageSearchEngine().identifiers())[0], folder=SESSION_FILE_STORAGE_PATH, upload=True, mode="image", htmlsession=html_session, clf=logo_classifier, clearbit=USE_CLEARBIT_LOGO_API, tld=tldextract.extract(url_domain).registered_domain)
+    search.handle_folder(os.path.join(SESSION_FILE_STORAGE_PATH, url_hash), url_hash)
     
-    url_list = conn_storage.execute("select distinct result from search_result_image WHERE filepath = ?", (shahash,)).fetchall()
+    url_list = conn_storage.execute("select distinct result from search_result_image WHERE filepath = ?", (url_hash,)).fetchall()
 
     ######
     sanImgST = time.time()
@@ -213,25 +217,25 @@ def check_url():
 
 
     domain_list_tld_extract = []
-#    for domain1 in domain_list_with_san:
-#        domain_list_tld_extract.append(str(tldextract.extract(str(domain1)).registered_domain))
+    # for domain1 in domain_list_with_san:
+        # domain_list_tld_extract.append(str(tldextract.extract(str(domain1)).registered_domain))
     # replaces the above
     domain_list_tld_extract = appdom.append_domains_san_to_tld_extract(domain_list_with_san)
 
 
     ######
     sanImgSPT = time.time()
-    main_logger.warn(f"Time elapsed for imgSAN find for {shahash} is {sanImgSPT - sanImgST}")
+    main_logger.warn(f"Time elapsed for imgSAN find for {url_hash} is {sanImgSPT - sanImgST}")
     ######
 
     #breakpoint()
-    if (tldextract.extract(urldomain).registered_domain in domain_list_tld_extract):
+    if (tldextract.extract(url_domain).registered_domain in domain_list_tld_extract):
         print('Found in domain list')
         stopTime = time.time()
         main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime} with result not phishing")
         sessions.store_state(uuid, url, 'not phishing', '')
 
-        result = [{'url': url, 'status': "not phishing", 'sha1': shahash}]
+        result = [{'url': url, 'status': "not phishing", 'sha1': url_hash}]
         return jsonify(result)
     # no match, go on to image comparison per url
 
@@ -241,7 +245,7 @@ def check_url():
 
     sessions.store_state(uuid, url, 'processing', 'imagecompare')
     
-    out_dir = os.path.join('compare_screens', shahash)
+    out_dir = os.path.join('compare_screens', url_hash)
     if not os.path.exists(out_dir):
             os.makedirs(out_dir)
     options = Options()
@@ -271,7 +275,7 @@ def check_url():
         driver.save_screenshot(out_dir + "/" + str(index) + '.png')
 
         # image compare
-        path_a = "files/" + shahash + "/screen.png"
+        path_a = "files/" + url_hash + "/screen.png"
         path_b = out_dir + "/" + str(index) + ".png"
         emd = None
         dct = None
@@ -308,13 +312,13 @@ def check_url():
             main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime} with result phishing")
             sessions.store_state(uuid, url, 'phishing', '')
             
-            result = [{'url': url, 'status': "phishing", 'sha1': shahash}]
+            result = [{'url': url, 'status': "phishing", 'sha1': url_hash}]
             return jsonify(result)
         #otherwise go to next
     
     ######
     compareSPT = time.time()
-    main_logger.warn(f"Time elapsed for imgCompare find for {shahash} is {compareSPT - compareST}")
+    main_logger.warn(f"Time elapsed for imgCompare find for {url_hash} is {compareSPT - compareST}")
     ######
 
     driver.quit()
@@ -326,7 +330,7 @@ def check_url():
     #   result: inconclusive_blocked
     
     main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime} with result inconclusive")
-    result = [{'url': url, 'status': "inconclusive", 'sha1': shahash}]
+    result = [{'url': url, 'status': "inconclusive", 'sha1': url_hash}]
     sessions.store_state(uuid, url, 'inconclusive', '')
     return jsonify(result)
 
