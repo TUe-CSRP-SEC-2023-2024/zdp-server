@@ -57,7 +57,7 @@ class Sessions():
         result = cursor.fetchone()
         storage_conn.close()
         if result == None:
-            return 'new'
+            return 'new' # TODO this needs a better value
         else:
             return result
 
