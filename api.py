@@ -97,7 +97,8 @@ def check_url():
     else:
         main_logger.info("Not a phish URL, real URL")
 
-    url_domain = domains.get_netloc(url)
+    url_domain = domains.get_hostname(url)
+    url_registered_domain = domains.get_registered_domain(url_domain)
     url_hash = hashlib.sha1(url.encode('utf-8')).hexdigest() # TODO: switch to better hash, cause SHA-1 broken?
 
     session_file_path = os.path.join(SESSION_FILE_STORAGE_PATH, url_hash)
@@ -146,100 +147,31 @@ def check_url():
         comp_time_diff = comp_end_time - comp_start_time
         main_logger.warn(f"Time elapsed for text find for {url_hash} is {comp_time_diff}s")
 
+    # Handle results of search from above
+    res = check_search_results(uuid, url, url_hash, url_registered_domain, url_list_text, startTime)
+    if res != None:
+        return res
     
-    sanTextST = time.time()
-
-    domain_list = []
-    for urls in url_list_text:
-        url_domain = domains.get_netloc(urls[0])
-        domain_list.append(url_domain)
-
-    domain_list_with_san = domain_list.copy()
-
-    # Get SAN names and append
-    for domain in domain_list:
-        try:
-            domain_list_with_san.append(domains.get_san_names(domain))
-        except:
-            print('Error in SAN for ' + str(domain))
-
-
-    domain_list_tld_extract = []
-    # for domain1 in domain_list_with_san:
-    #     domain_list_tld_extract.append(str(tldextract.extract(str(domain1)).registered_domain))
-    # replaces the above
-    domain_list_tld_extract = domains.append_domains_san_to_tld_extract(domain_list_with_san)
-
-    ######
-    sanTextSPT = time.time()
-    main_logger.warn(f"Time elapsed for textSAN for {url_hash} is {sanTextSPT - sanTextST}s for {len(domain_list)} domains")
-    ######
-    #breakpoint()
-    if (tldextract.extract(url_domain).registered_domain in domain_list_tld_extract):
-        print('Found in domain list')
-        stopTime = time.time()
-        main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime}s with result not phishing")
-        sessions.store_state(uuid, url, 'not phishing', '')
-        
-        result = [{'url': url, 'status': "not phishing", 'sha1': url_hash}]
-        return jsonify(result)
-
+    # No match through text, move on to image search
     sessions.store_state(uuid, url, 'processing', 'imagesearch')
 
-    search = ReverseImageSearch(storage=DB_PATH_OUTPUT, search_engine=list(GoogleReverseImageSearchEngine().identifiers())[0], folder=SESSION_FILE_STORAGE_PATH, upload=True, mode="image", htmlsession=html_session, clf=logo_classifier, clearbit=USE_CLEARBIT_LOGO_API, tld=tldextract.extract(url_domain).registered_domain)
+    search = ReverseImageSearch(storage=DB_PATH_OUTPUT, 
+                                search_engine=list(GoogleReverseImageSearchEngine().identifiers())[0], 
+                                folder=SESSION_FILE_STORAGE_PATH, 
+                                upload=True, mode="image", 
+                                htmlsession=html_session, 
+                                clf=logo_classifier, 
+                                clearbit=USE_CLEARBIT_LOGO_API, 
+                                tld=url_registered_domain)
     search.handle_folder(session_file_path, url_hash)
     
-    url_list = db_conn_output.execute("select distinct result from search_result_image WHERE filepath = ?", (url_hash,)).fetchall()
+    url_list_img = db_conn_output.execute("SELECT DISTINCT result FROM search_result_image WHERE filepath = ?", [url_hash]).fetchall()
 
-    ######
-    sanImgST = time.time()
-    ######
+    res = check_search_results(uuid, url, url_hash, url_registered_domain, url_list_img, startTime)
+    if res != None:
+        return res
 
-    domain_list=[]
-    for urls in url_list:
-        url_domain = domains.get_netloc(urls[0])
-        domain_list.append(url_domain)
-
-    domain_list_with_san = domain_list.copy()
-
-    # Get SAN names and append
-    for domain in domain_list:
-        try:
-            context = ssl.create_default_context()
-
-            with socket.create_connection((domain, 443), timeout=2) as sock:
-                with context.wrap_socket(sock, server_hostname=domain) as ssock:
-                    cert = ssock.getpeercert()
-                    sAN = defaultdict(list)
-                    for type_, san in cert['subjectAltName']:
-                        sAN[type_].append(san)
-                    domain_list_with_san.append(sAN['DNS'])
-        except:
-            print('Error in SAN for ' + str(domain))
-
-
-    domain_list_tld_extract = []
-    # for domain1 in domain_list_with_san:
-        # domain_list_tld_extract.append(str(tldextract.extract(str(domain1)).registered_domain))
-    # replaces the above
-    domain_list_tld_extract = appdom.append_domains_san_to_tld_extract(domain_list_with_san)
-
-
-    ######
-    sanImgSPT = time.time()
-    main_logger.warn(f"Time elapsed for imgSAN find for {url_hash} is {sanImgSPT - sanImgST}s")
-    ######
-
-    #breakpoint()
-    if (tldextract.extract(url_domain).registered_domain in domain_list_tld_extract):
-        print('Found in domain list')
-        stopTime = time.time()
-        main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime}s with result not phishing")
-        sessions.store_state(uuid, url, 'not phishing', '')
-
-        result = [{'url': url, 'status': "not phishing", 'sha1': url_hash}]
-        return jsonify(result)
-    # no match, go on to image comparison per url
+    # No match through images, go on to image comparison per URL
 
     ######
     compareST = time.time()
@@ -249,28 +181,35 @@ def check_url():
     
     out_dir = os.path.join('compare_screens', url_hash)
     if not os.path.exists(out_dir):
-            os.makedirs(out_dir)
+        os.makedirs(out_dir)
     options = Options()
     options.add_argument( "--headless" )
 
-    url_list = url_list_text + url_list
+    url_list_img_cmp = url_list_text + url_list_img
 
-    # initialize web driver by installing a fresh version of it
-    #driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
-    # replaces the above with a fixed ChromeDriver
+    # Initialize web driver
     driver = webdriver.Chrome(options=options)
     image_width, image_height = parsing.get_size()
     driver.set_window_size(image_width, image_height)
     driver.set_page_load_timeout(WEB_DRIVER_TIMEOUT)
 
-    for index, resulturl in enumerate(url_list):
+    for index, resulturl in enumerate(url_list_img_cmp):
         if (not isinstance(resulturl[0], str)):
             continue
         urllower = resulturl[0].lower()
-        if (("www.mijnwoordenboek.nl/puzzelwoordenboek/Dot/1" in resulturl[0]) or ("amsterdamvertical" in resulturl[0]) or ("dotgroningen" in urllower) or ("britannica" in resulturl[0]) or ("en.wikipedia.org/wiki/Language" in resulturl[0]) or (resulturl[0] == '') or (("horizontal" in urllower) and not ("horizontal" in tldextract.extract(resulturl[0]).registered_domain)) or (("vertical" in urllower) and not ("horizontal" in tldextract.extract(resulturl[0]).registered_domain))):
-            continue
-        # get screenshot of url
         
+        # TODO whyyyyyyy
+        if (("www.mijnwoordenboek.nl/puzzelwoordenboek/Dot/1" in resulturl[0]) or 
+                ("amsterdamvertical" in resulturl[0]) or ("dotgroningen" in urllower) or 
+                ("britannica" in resulturl[0]) or 
+                ("en.wikipedia.org/wiki/Language" in resulturl[0]) or 
+                (resulturl[0] == '') or 
+                (("horizontal" in urllower) and 
+                    not ("horizontal" in domains.get_registered_domain(resulturl[0])) 
+                    or (("vertical" in urllower) and not ("horizontal" in domains.get_registered_domain(resulturl[0]))))):
+            continue
+        
+        # Take screenshot of URL and save it
         try:
             driver.get(resulturl[0])
         except:
@@ -348,6 +287,41 @@ def get_url_state():
     result = [{'status': currStatus[0], 'state': currStatus[1]}]
     return jsonify(result)
 
+
+# TODO move to other file, same with some funkys above
+def check_search_results(uuid, url, url_hash, url_registered_domain, found_urls, startTime):
+    sanTextST = time.time()
+
+    domain_list_tld_extract = set()
+    # Get SAN names and append
+    for urls in found_urls:
+        domain = domains.get_hostname(urls[0]) # TODO remove index requirement
+        try:
+            san_names = [domain] + domains.get_san_names(domain)
+        except:
+            main_logger.error(f'Error in SAN for {domain}')
+            continue
+        
+        for hostname in san_names:
+            registered_domain = domains.get_registered_domain(hostname)
+            domain_list_tld_extract.append(registered_domain)
+
+    ######
+    sanTextSPT = time.time()
+    main_logger.warn(f"Time elapsed for textSAN for {url_hash} is {sanTextSPT - sanTextST}s for {len(found_urls)} domains")
+    ######
+    
+    if url_registered_domain in domain_list_tld_extract:
+        print('Found in domain list')
+        stopTime = time.time()
+        main_logger.warn(f"Time elapsed for {url} is {stopTime - startTime}s with result not phishing")
+        sessions.store_state(uuid, url, 'not phishing', '')
+        
+        result = [{'url': url, 'status': "not phishing", 'sha1': url_hash}]
+        return jsonify(result)
+
+    # no results yet
+    return None
 
 # Using this lib to avoid runtimerror with many requests
 #__import__('IPython').embed()
