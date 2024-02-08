@@ -28,27 +28,37 @@ import joblib
 from utils.sessions import Sessions
 import utils.appendsandomains as appdom
 
-#to avoid RuntimeError('This event loop is already running') when there are many of requests
+# To avoid RuntimeError('This event loop is already running') when there are many of requests
 import nest_asyncio
-
-main_logger = CustomLogger().main_logger
-htmlsession = HTMLSession()
-htmlsession.browser
-
-logo_classifier = joblib.load('saved-classifiers/gridsearch_clf_rt_recall.joblib')
 
 # Option for saving the taken screenshots
 SAVE_SCREENSHOT_FILES = False
 # Whether to use the Clearbit logo API (see https://clearbit.com/logo)
 USE_CLEARBIT_LOGO_API = True
 
-def_folder = "files/"
-def_storage = "db/output_operational.db"
-session_db = "db/sessions.db"
-sessions = Sessions(session_db, False)
+# Where to store temporary session files, such as screenshots
+SESSION_FILE_STORAGE_PATH = "files/"
+# Database path for the operational output (?)
+DB_PATH_OUTPUT = "db/output_operational.db"
+# Database path for the sessions
+DB_PATH_SESSIONS = "db/sessions.db"
 
-# sets the load page timeout for the web driver
-webdriver_timeout = 5
+# Page loading timeout for web driver
+WEB_DRIVER_TIMEOUT = 5
+
+
+# The storage interface for the sessions
+sessions = Sessions(DB_PATH_SESSIONS, False)
+
+# The main logger for the whole program, singleton
+main_logger = CustomLogger().main_logger
+
+# The HTTP + HTML session to use for reverse image search
+html_session = HTMLSession()
+html_session.browser # TODO why is this here
+
+# The logo classifier, deserialized from file
+logo_classifier = joblib.load('saved-classifiers/gridsearch_clf_rt_recall.joblib')
 
 app = Flask(__name__)
 app.config["DEBUG"] = False
@@ -109,14 +119,14 @@ def check_url():
     parse = Parsing(SAVE_SCREENSHOT_FILES, json=json, store="files/" + shahash)
     image_width, image_height = parse.get_size()
 
-    conn_storage = sqlite3.connect(def_storage)
+    conn_storage = sqlite3.connect(DB_PATH_OUTPUT)
 
     ######
     textFindST = time.time()
     ######
 
-    search = ReverseImageSearch(storage=def_storage, search_engine=list(GoogleReverseImageSearchEngine().identifiers())[0], folder=def_folder, upload=False, mode="text", htmlsession=htmlsession, clf=logo_classifier)
-    search.handle_folder(os.path.join(def_folder, shahash), shahash)
+    search = ReverseImageSearch(storage=DB_PATH_OUTPUT, search_engine=list(GoogleReverseImageSearchEngine().identifiers())[0], folder=SESSION_FILE_STORAGE_PATH, upload=False, mode="text", htmlsession=html_session, clf=logo_classifier)
+    search.handle_folder(os.path.join(SESSION_FILE_STORAGE_PATH, shahash), shahash)
     url_list_text = conn_storage.execute("select distinct result from search_result_text WHERE filepath = ?", (shahash,)).fetchall()
 
     ######
@@ -169,8 +179,8 @@ def check_url():
 
     sessions.store_state(uuid, url, 'processing', 'imagesearch')
 
-    search = ReverseImageSearch(storage=def_storage, search_engine=list(GoogleReverseImageSearchEngine().identifiers())[0], folder=def_folder, upload=True, mode="image", htmlsession=htmlsession, clf=logo_classifier, clearbit=USE_CLEARBIT_LOGO_API, tld=tldextract.extract(urldomain).registered_domain)
-    search.handle_folder(os.path.join(def_folder, shahash), shahash)
+    search = ReverseImageSearch(storage=DB_PATH_OUTPUT, search_engine=list(GoogleReverseImageSearchEngine().identifiers())[0], folder=SESSION_FILE_STORAGE_PATH, upload=True, mode="image", htmlsession=html_session, clf=logo_classifier, clearbit=USE_CLEARBIT_LOGO_API, tld=tldextract.extract(urldomain).registered_domain)
+    search.handle_folder(os.path.join(SESSION_FILE_STORAGE_PATH, shahash), shahash)
     
     url_list = conn_storage.execute("select distinct result from search_result_image WHERE filepath = ?", (shahash,)).fetchall()
 
@@ -243,7 +253,7 @@ def check_url():
     # replaces the above with a fixed ChromeDriver
     driver = webdriver.Chrome(options=options)
     driver.set_window_size(image_width, image_height)
-    driver.set_page_load_timeout(webdriver_timeout)
+    driver.set_page_load_timeout(WEB_DRIVER_TIMEOUT)
 
     for index, resulturl in enumerate(url_list):
         if (not isinstance(resulturl[0], str)):
