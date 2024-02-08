@@ -97,7 +97,7 @@ def check_url():
     else:
         main_logger.info("Not a phish URL, real URL")
 
-    url_domain = urlparse(url).netloc
+    url_domain = domains.get_netloc(url)
     url_hash = hashlib.sha1(url.encode('utf-8')).hexdigest() # TODO: switch to better hash, cause SHA-1 broken?
 
     session_file_path = os.path.join(SESSION_FILE_STORAGE_PATH, url_hash)
@@ -151,7 +151,7 @@ def check_url():
 
     domain_list = []
     for urls in url_list_text:
-        url_domain = urlparse(urls[0]).netloc
+        url_domain = domains.get_netloc(urls[0])
         domain_list.append(url_domain)
 
     domain_list_with_san = domain_list.copy()
@@ -197,7 +197,7 @@ def check_url():
 
     domain_list=[]
     for urls in url_list:
-        url_domain = urlparse(urls[0]).netloc
+        url_domain = domains.get_netloc(urls[0])
         domain_list.append(url_domain)
 
     domain_list_with_san = domain_list.copy()
