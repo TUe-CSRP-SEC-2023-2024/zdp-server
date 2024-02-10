@@ -12,11 +12,11 @@ from utils.customlogger import CustomLogger
 main_logger = CustomLogger().main_logger
 
 
-def _count_colours(image : cv2.MatLike):
+def _count_colours(image : cv2.typing.MatLike):
     unique_colors, unique_colors_counts = np.unique(image.reshape(-1, image.shape[-1]), axis=0, return_counts=True) 
     return (len(unique_colors), np.amax(unique_colors_counts, initial = 0) / max(np.sum(unique_colors_counts), 1) * 100)
 
-def _draw_regions(image: cv2.MatLike, img_path: str, regions: list, highlight_name: str):
+def _draw_regions(image: cv2.typing.MatLike, img_path: str, regions: list, highlight_name: str):
         drawimg = np.copy(image)
         
         for region in regions:
@@ -200,7 +200,7 @@ def find_regions (img_path : str, draw_flag = FLAG_DRAW, highlight_name = "Highl
         regions_of_interest.append(region)
         
     if draw:
-        _draw_regions(image, regions_of_interest, f"{highlight_name}.allregions")
+        _draw_regions(image, img_path, regions_of_interest, f"{highlight_name}.allregions")
 
     return regions_of_interest, img_data
     
