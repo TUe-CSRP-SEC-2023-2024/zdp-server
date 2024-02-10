@@ -16,9 +16,35 @@ def _count_colours(image : cv2.MatLike):
     unique_colors, unique_colors_counts = np.unique(image.reshape(-1, image.shape[-1]), axis=0, return_counts=True) 
     return (len(unique_colors), np.amax(unique_colors_counts, initial = 0) / max(np.sum(unique_colors_counts), 1) * 100)
 
-def _find_regions(image: cv2.MatLike, imgpath: str, draw = True, highlight_name = "Highlight", invert = True):
-    
-            return True
+def _draw_regions(image: cv2.MatLike, img_path: str, regions: list, highlight_name: str):
+        drawimg = np.copy(image)
+        
+        for region in regions:
+            main_logger.debug("Drawing region #{idx}")
+            h,w,_ = region[0].shape
+            x = region[2]
+            y = region[3]
+            color_int = random.randint(1, 3)
+            color = (0,0,0)
+            if color_int == 1:
+                color = (0,0,255)
+            elif color_int == 2:
+                color = (0,255,0)
+            else:
+                color = (255,0,0)
+            flip = (random.randint(0, 1) == 1)
+            cv2.rectangle(drawimg,(x-5,y-5),(x+w-5,y+h-5),color,1)
+            if region[7]:
+                text = "-" + str(region[1])
+            else:
+                text = str(region[1])
+            if flip:
+                cv2.putText(drawimg, text, (x+w-random.randint(-5, 5), y+h-random.randint(-5, 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            else:
+                cv2.putText(drawimg, text, (x-random.randint(-5, 5), y-random.randint(-5, 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            # if subregiondraw:
+            #     cv2.imwrite(f"{highlightname}.subregion.{idx}.png", region[0])
+        cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(img_path)), f"{highlight_name}.png"), drawimg)
 
 
 # Finds ALL regions in the linked image
@@ -131,7 +157,13 @@ FLAG_DRAW_RECUSRIVE = 2
 """Tells the function to draw the regions and subregions.""" 
 
 def find_regions (img_path : str, draw_flag = FLAG_DRAW, highlight_name = "Highlight"):
-    """Find all regions in the image and return the data of the image and the regions.
+    """
+    Finds all the regions of interest in the image and returns the data of the image.
+    
+    Args:
+        img_path (str): The path to the image file.
+        draw_flag (int, optional): The flag to tell the function to draw the regions. Defaults to FLAG_DRAW.
+        highlight_name (str, optional): The name of the file to save the highlighted image. Defaults to "Highlight".
     """
     
     if(draw_flag < FLAG_NO_DRAW or draw_flag > FLAG_DRAW_RECUSRIVE):
@@ -148,90 +180,35 @@ def find_regions (img_path : str, draw_flag = FLAG_DRAW, highlight_name = "Highl
     regions = _findregions(image, img_path, recursive_draw, highlight_name = f"{highlight_name}.allregions.inverted", invert = True)
     regions += _findregions(image, img_path, recursive_draw, highlight_name = f"{highlight_name}.allregions", invert = False)
 
-    roi = [] # Do not know what this stands for
+    regions_of_interest = []
     
     for index, region in enumerate(regions):
-        height, width, _ = region[0].shape
-        child = False
-        
+        region_height, region_width, _ = region[0].shape
+
         for index2, region2 in enumerate(regions):
             # don't need to check against itself
             if index == index2:
                 continue
             
-            height2, width2, _ = region2[0].shape
-            if region[2] >= region2[2] and (region[2] + width <= region2[2] + width2):
+            region_height2, region_width2, _ = region2[0].shape
+            if region[2] >= region2[2] and (region[2] + region_width <= region2[2] + region_width2):
                 # On x axis region1 is contained within region2
-                if region[3] >= region2[3] and (region[3] + height <= region2[3] + height2):
+                if region[3] >= region2[3] and (region[3] + region_height <= region2[3] + region_height2):
                     # On y axis region 1 is contained within region2
-                    #child = True
                     continue
-        if not child:
-            roi.append(region)
-
-    
-
-
-# deprecated
-def findregions( imgpath, draw=True, recursivedraw=False, subregiondraw=False, highlightname="Highlight"):
-    
-    main_logger.debug("Loading image: " + imgpath)
-    image = cv2.imread(imgpath, 1)
-    imgdata = [_count_colours(image), image.shape[0], image.shape[1]]
-
-    regions = _findregions(image, imgpath, draw=(draw & recursivedraw), highlight_name=f"{highlightname}.allregions.1", invert=True)
-    regions += _findregions(image, imgpath, draw=(draw & recursivedraw), highlight_name=f"{highlightname}.allregions.2", invert=False)
-
-    roi = []
-    # Find containers only
-    for idx, region in enumerate(regions):
-        h, w, _ = region[0].shape
-        child = False
-        for idx2, region2 in enumerate(regions):
-            #don't need to check against itself
-            if idx==idx2:
-                continue
-            h2, w2, _ = region2[0].shape
-            if region[2] >= region2[2] and (region[2]+w <= region2[2]+w2):
-                # On x axis region1 is contained within region2
-                if region[3] >= region2[3] and (region[3]+h <= region2[3]+h2):
-                    # On y axis region 1 is contained within region2
-                    #child = True
-                    continue
-        if not child:
-            roi.append(region)
-
+        
+        regions_of_interest.append(region)
+        
     if draw:
-        drawimg = np.copy(image)
-        for idx, region in enumerate(roi):
-            main_logger.debug("Drawing region #{idx}")
-            h,w,_ = region[0].shape
-            x = region[2]
-            y = region[3]
-            color_int = random.randint(1, 3)
-            color = (0,0,0)
-            if color_int == 1:
-                color = (0,0,255)
-            elif color_int == 2:
-                color = (0,255,0)
-            else:
-                color = (255,0,0)
-            flip = (random.randint(0, 1) == 1)
-            cv2.rectangle(drawimg,(x-5,y-5),(x+w-5,y+h-5),color,1)
-            if region[7]:
-                text = "-" + str(region[1])
-            else:
-                text = str(region[1])
-            if flip:
-                cv2.putText(drawimg, text, (x+w-random.randint(-5, 5), y+h-random.randint(-5, 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-            else:
-                cv2.putText(drawimg, text, (x-random.randint(-5, 5), y-random.randint(-5, 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-            if subregiondraw:
-                cv2.imwrite(f"{highlightname}.subregion.{idx}.png", region[0])
-        cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(imgpath)),f"{highlightname}.png"), drawimg)
-    return roi, imgdata
+        _draw_regions(image, regions_of_interest, f"{highlight_name}.allregions")
 
-# Open the blacklist.txt file and read the contents into a list
-with open("utils/blacklist.txt", "r") as file:
-    blacklist = [line.strip() for line in file.readlines()]
-    print(blacklist)
+    return regions_of_interest, img_data
+    
+# Deprecated
+def findregions( imgpath, draw=True, recursivedraw=False, subregiondraw=False, highlightname="Highlight"):
+    """
+    This function is deprecated. Use find_regions() instead.
+    ------
+    """
+    
+    return find_regions(imgpath, draw_flag = draw, highlight_name = highlightname)
