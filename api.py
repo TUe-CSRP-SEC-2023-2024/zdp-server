@@ -91,7 +91,7 @@ def check_url():
 
     # extra json field for evaluation purposes
     # the hash computed in the DB is the this one
-    if "phish_url" in json:
+    if "phishURL" in json:
         url = json["phishURL"]
         main_logger.info(f"Real URL changed to phishURL: {url}\n")
     else:
