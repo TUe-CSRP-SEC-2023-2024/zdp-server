@@ -1,10 +1,10 @@
-import urllib
+from urllib.parse import urlparse
 import ssl
 import socket
 import tldextract
 
 def get_hostname(url):
-    return urllib.urlparse(url).netloc
+    return urlparse(url).netloc
 
 def get_san_names(domain):
     context = ssl.create_default_context()
