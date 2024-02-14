@@ -81,21 +81,22 @@ def check_url():
     # main_logger.warn("Received JSON: " + str(json["URL"]))
         
     url = json["URL"]
+    screenshot_url = url # the actual URL to screenshot
+    # extra json field for evaluation purposes
+    # the hash computed in the DB is the this one
+    if "phishURL" in json: # TODO only allow this on a testing environment, not prod
+        url = json["phishURL"]
+        main_logger.info(f"Real URL changed to phishURL: {url}\n")
+    
     uuid = json["uuid"]
+    pagetitle = json['pagetitle']
+    image64 = json['image64']
     main_logger.info(f'''
 
 ##########################################################
 ##### Request received for URL:\t{url}
 ##########################################################
 ''')
-
-    # extra json field for evaluation purposes
-    # the hash computed in the DB is the this one
-    if "phishURL" in json:
-        url = json["phishURL"]
-        main_logger.info(f"Real URL changed to phishURL: {url}\n")
-    else:
-        main_logger.info("Not a phish URL, real URL")
 
     url_domain = domains.get_hostname(url)
     url_registered_domain = domains.get_registered_domain(url_domain)
@@ -121,7 +122,7 @@ def check_url():
     sessions.store_state(uuid, url, 'processing', 'textsearch')
 
     # Take screenshot of requested page
-    parsing = Parsing(SAVE_SCREENSHOT_FILES, json=json, store=session_file_path)
+    parsing = Parsing(SAVE_SCREENSHOT_FILES, pagetitle, image64, screenshot_url, store=session_file_path)
 
     db_conn_output = sqlite3.connect(DB_PATH_OUTPUT)
 
