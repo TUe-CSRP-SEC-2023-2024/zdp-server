@@ -233,7 +233,6 @@ def test(url, screenshot_url, uuid, pagetitle, image64):
     sessions.store_state(uuid, url, 'inconclusive', '')
     return jsonify(result)
 
-# TODO move to other file, same with some funkys above
 def check_search_results(uuid, url, url_hash, url_registered_domain, found_urls, startTime):
     sanTextST = time.time()
 
