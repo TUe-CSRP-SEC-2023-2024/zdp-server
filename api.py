@@ -13,7 +13,7 @@ nest_asyncio.apply()
 
 
 # The storage interface for the sessions
-sessions = detection.sessions
+session_storage = detection.session_storage
 
 # The main logger for the whole program, singleton
 main_logger = CustomLogger().main_logger
@@ -64,9 +64,10 @@ def get_url_state():
     url = json["URL"]
     uuid = json["uuid"]
     
-    currStatus = sessions.get_state(uuid, url)
+    session = session_storage.get_session(uuid, url)
+    status = session.get_state()
     
-    result = [{'status': currStatus[0], 'state': currStatus[1]}]
+    result = [{'status': status.result, 'state': status.state}]
     return jsonify(result)
 
 

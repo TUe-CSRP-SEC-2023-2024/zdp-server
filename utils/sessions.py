@@ -3,7 +3,8 @@ from datetime import datetime
 import tldextract
 
 
-class Sessions():
+# TODO make abstract? can allow for differentiation
+class SessionStorage:
     """
     The storage interface for all current sessions.
 
@@ -24,14 +25,14 @@ class Sessions():
         storage_conn.commit()
         storage_conn.close()
 
-    def store_state(self, uuid, url, result, state):
+    def _store_state(self, uuid, url, result, state):
         """
         Stores the given state (uuid, url, result, state) in the database.
         """
         storage_conn = sqlite3.connect(self.storage)
         
         now = datetime.now()
-        if self.get_state(uuid, url) == 'new':
+        if self._get_state(uuid, url) == None:
             domain = tldextract.extract(url).registered_domain
             
             storage_conn.execute("INSERT INTO session (uuid, timestamp, url, tld, result, state) VALUES (?, ?, ?, ?, ?, ?)", 
@@ -43,9 +44,9 @@ class Sessions():
         storage_conn.commit()
         storage_conn.close()
 
-    def get_state(self, uuid, url):
+    def _get_state(self, uuid, url):
         """
-        Retrieves the current state from the database, or 'new' in case it is not present.
+        Retrieves the current State from the database, or None in case it is not present.
         """
         storage_conn = sqlite3.connect(self.storage)
         
@@ -54,12 +55,13 @@ class Sessions():
         else:
             cursor = storage_conn.execute("SELECT result, state, timestamp FROM session WHERE uuid = ? AND url = ?", [uuid, url])
         
-        result = cursor.fetchone()
+        query_res = cursor.fetchone()
         storage_conn.close()
-        if result == None:
-            return 'new' # TODO this needs a better value
-        else:
-            return result
+
+        if query_res == None:
+            return None
+
+        return State(result=query_res[0], state=query_res[1], timestamp=query_res[2])
 
     def _setup_storage(self, storage_conn):
         sql_q_db = '''
@@ -73,3 +75,43 @@ class Sessions():
             );'''
         storage_conn.execute(sql_q_db)
         storage_conn.commit()
+    
+    def get_session(self, uuid, url) -> 'Session':
+        # TODO persist session objects up to a limit for performance improvements, in combination with state cache
+        return Session(self, uuid, url)
+
+class State:
+    result: str
+    state: str
+    timestamp = None
+
+    def __init__(self, result, state, timestamp=None):
+        self.result = result
+        self.state = state
+        self.timestamp = timestamp
+
+class Session:
+    """
+    Represents a single session, i.e. 
+    """
+    storage: SessionStorage
+    uuid: str
+    url: str
+
+    def __init__(self, storage, uuid, url):
+        self.storage = storage
+        self.uuid = uuid
+        self.url = url
+    
+    def set_state(self, result, state):
+        """
+        Sets the state of this session to the given result and state.
+        """
+        return self.storage._store_state(self.uuid, self.url, result, state)
+    
+    def get_state(self):
+        """
+        Retrieves the current State of this session.
+        """
+        # TODO cache state in Session object (updates with set_state), but needs assurance of no outside influence (one Session instance per uuid-url pair)
+        return self.storage._get_state(self.uuid, self.url)
