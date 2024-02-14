@@ -44,6 +44,8 @@ html_session.browser # TODO why is this here
 # The logo classifier, deserialized from file
 logo_classifier = joblib.load('saved-classifiers/gridsearch_clf_rt_recall.joblib')
 
+
+# TODO dont return direct json string, instead some Class instance for example
 def test(url, screenshot_url, uuid, pagetitle, image64):
     startTime = time.time()
 
