@@ -103,6 +103,8 @@ class Session:
         self.uuid = uuid
         self.url = url
     
+    # TODO make 'result' some sort of enum (phishing, not phishing, inconclusive, processing)
+    # also better names for the result,state
     def set_state(self, result, state):
         """
         Sets the state of this session to the given result and state.
