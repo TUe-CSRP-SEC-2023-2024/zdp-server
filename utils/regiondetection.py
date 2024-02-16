@@ -11,7 +11,7 @@ import math
 from utils.customlogger import CustomLogger
 main_logger = CustomLogger().main_logger
 
-# Get the number of unique colours and the percentage of the dominant colour in the given image
+# Get the number of unique colours and the percentage of the primary colour in the given image
 def _count_colours(image : cv2.typing.MatLike):
     # Flatten the image to a 2D array
     flattend_image = image.reshape(-1, image.shape[-1])
@@ -19,9 +19,9 @@ def _count_colours(image : cv2.typing.MatLike):
     # Get the unique colors and the number of times each appears in the image
     unique_colors, unique_colors_pixels = np.unique(flattend_image, axis = 0, return_counts = True) 
     
-    dominant_color_percentage = np.amax(unique_colors_pixels, initial = 0) / max(np.sum(unique_colors_pixels), initial = 1) * 100
+    primary_color_percentage = np.amax(unique_colors_pixels, initial = 0) / max(np.sum(unique_colors_pixels), initial = 1) * 100
     
-    return len(unique_colors), dominant_color_percentage
+    return len(unique_colors), primary_color_percentage
 
 # Draw the detected regions on the originial image
 def _draw_regions(image: cv2.typing.MatLike, img_path: str, regions: list, highlight_name: str):
@@ -52,11 +52,13 @@ def _draw_regions(image: cv2.typing.MatLike, img_path: str, regions: list, highl
             else:
                 cv2.putText(draw_img, text, (x - random.randint(-5, 5), y - random.randint(-5, 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
     
+            # TODO: Add subregion drawing
             #if subregiondraw:
             #     cv2.imwrite(f"{highlightname}.subregion.{idx}.png", region[0])
             
         cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(img_path)), f"{highlight_name}.png"), draw_img)
 
+# TODO: Add drawing capabilities for recursive and try to split the function into smaller parts
 def _find_regions(image : cv2.typing.MatLike, image_path : str, draw : bool, highlight_name : str, invert = True):
     
     main_logger.debug("Obtaining grayscale version of image")
@@ -94,7 +96,7 @@ def _find_regions(image : cv2.typing.MatLike, image_path : str, draw : bool, hig
 
             # Always true - region constraints could be applied here
             
-            ccnt, pct = _count_colours(region)
+            unique_colors_count, pct = _count_colours(region)
             # also get a greyscale version of the region for the other attributes
             # (see paper by Evdoxios Baratis and Euripides G.M. Petrakis why this is)
 
@@ -128,9 +130,9 @@ def _find_regions(image : cv2.typing.MatLike, image_path : str, draw : bool, hig
             occupied_bins = np.count_nonzero(int_hist)
 
             if len(hier) > 0:
-                regions.append((region, index, x, y, ccnt, pct, hier[0][index], invert, mean, std, skew, kurtosis, entropy, otsu, energy, occupied_bins))
+                regions.append((region, index, x, y, unique_colors_count, pct, hier[0][index], invert, mean, std, skew, kurtosis, entropy, otsu, energy, occupied_bins))
             else:
-                regions.append((region, index, x, y, ccnt, pct, [-2, -2, -2, -2], invert, mean, std, skew, kurtosis, entropy, otsu, energy, occupied_bins))
+                regions.append((region, index, x, y, unique_colors_count, pct, [-2, -2, -2, -2], invert, mean, std, skew, kurtosis, entropy, otsu, energy, occupied_bins))
             
     return regions
 
@@ -186,8 +188,8 @@ def find_regions (image_path : str, draw_flag = FLAG_DRAW, highlight_name = "Hig
     
     img_data = (_count_colours(image), image.shape[0], image.shape[1])
     
-    regions = _findregions(image, image_path, recursive_draw, highlight_name = f"{highlight_name}.allregions.inverted", invert = True)
-    regions += _findregions(image, image_path, recursive_draw, highlight_name = f"{highlight_name}.allregions.not_inverted", invert = False)
+    regions = _find_regions(image, image_path, recursive_draw, highlight_name = f"{highlight_name}.allregions.inverted", invert = True)
+    regions += _find_regions(image, image_path, recursive_draw, highlight_name = f"{highlight_name}.allregions.not_inverted", invert = False)
     
     regions_of_interest = _validate_regions(regions)
         
@@ -206,13 +208,13 @@ def findregions(imgpath, draw=True, recursivedraw=False, subregiondraw=False, hi
     return find_regions(imgpath, draw_flag = FLAG_DRAW_RECUSRIVE, highlight_name = highlightname)
 
 # Deprecated
-def _findregions(image, imgpath, draw = True, highlight_name="Highlight", invert=True):
-    """
-    This function is deprecated. Use _find_regions() instead.
-    ------
-    """
+# def _findregions(image, imgpath, draw = True, highlight_name="Highlight", invert=True):
+#     """
+#     This function is deprecated. Use _find_regions() instead.
+#     ------
+#     """
     
-    _find_regions(image, imgpath, draw, highlight_name, invert)
+#     _find_regions(image, imgpath, draw, highlight_name, invert)
     
     # if draw:
     #     drawimg = np.copy(image)
