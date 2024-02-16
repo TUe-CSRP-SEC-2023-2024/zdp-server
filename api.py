@@ -56,7 +56,9 @@ def check_url():
     pagetitle = json['pagetitle']
     image64 = json['image64']
     
-    return detection.test(url, screenshot_url, uuid, pagetitle, image64)
+    res = detection.test(url, screenshot_url, uuid, pagetitle, image64)
+
+    return res.to_json_str()
     
 @app.route('/api/v1/url/state', methods=['POST'])
 def get_url_state():

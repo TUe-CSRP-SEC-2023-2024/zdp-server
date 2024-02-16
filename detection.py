@@ -47,7 +47,7 @@ logo_classifier = joblib.load('saved-classifiers/gridsearch_clf_rt_recall.joblib
 
 
 # TODO dont return direct json string, instead some Class instance for example
-def test(url, screenshot_url, uuid, pagetitle, image64):
+def test(url, screenshot_url, uuid, pagetitle, image64) -> 'DetectionResult':
     main_logger.info(f'''
 
 ##########################################################
@@ -73,9 +73,7 @@ def test(url, screenshot_url, uuid, pagetitle, image64):
             
             main_logger.info(f'[RESULT] {cache_result.result}, for url {url}, served from cache')
 
-            # TODO return object doesnt need to specify the type of hash (rename to just 'hash' or sth)
-            result = [{'url': url, 'status': cache_result.result, 'sha1': url_hash}]
-            return jsonify(result)
+            return DetectionResult(url, url_hash, cache_result.result)
     
     # Update the current state in the session storage
     session.set_state('processing', 'textsearch')
@@ -208,8 +206,7 @@ def test(url, screenshot_url, uuid, pagetitle, image64):
 
                 session.set_state('phishing', '')
                 
-                result = [{'url': url, 'status': "phishing", 'sha1': url_hash}]
-                return jsonify(result)
+                return DetectionResult(url, url_hash, 'phishing')
             #otherwise go to next
 
     driver.quit()
@@ -220,11 +217,10 @@ def test(url, screenshot_url, uuid, pagetitle, image64):
     
     main_logger.info(f'[RESULT] Inconclusive, for url {url}')
 
-    result = [{'url': url, 'status': "inconclusive", 'sha1': url_hash}]
     session.set_state('inconclusive', '')
-    return jsonify(result)
+    return DetectionResult(url, url_hash, 'inconclusive')
 
-def check_search_results(uuid, url, url_hash, url_registered_domain, found_urls):
+def check_search_results(uuid, url, url_hash, url_registered_domain, found_urls) -> 'DetectionResult':
     with TimeIt('SAN domain check'):
         session = session_storage.get_session(uuid, url)
 
@@ -248,8 +244,24 @@ def check_search_results(uuid, url, url_hash, url_registered_domain, found_urls)
         main_logger.info(f'[RESULT] Not phishing, for url {url}, due to registered domain validation')
         session.set_state('not phishing', '')
         
-        result = [{'url': url, 'status': "not phishing", 'sha1': url_hash}]
-        return jsonify(result)
+        return DetectionResult(url, url_hash, 'not phishing')
 
     # no results yet
     return None
+
+# TODO overlaps with State in sessions.py, merge them or sth
+class DetectionResult:
+    url: str
+    url_hash: str
+
+    status: str # 'not phishing', 'phishing', 'inconclusive', 'processing'
+
+    def __init__(self, url: str, url_hash: str, status: str):
+        self.url = url
+        self.url_hash = url_hash
+        self.status = status
+    
+    def to_json_str(self):
+        # TODO return object doesnt need to specify the type of hash (rename to just 'hash' or sth)
+        obj = [{'url': self.url, 'status': self.status, 'sha1': self.url_hash}]
+        return jsonify(obj)
