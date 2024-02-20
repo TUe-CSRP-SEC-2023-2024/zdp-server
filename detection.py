@@ -269,6 +269,6 @@ class DetectionResult:
         self.status = status
     
     def to_json_str(self):
-        # TODO return object doesnt need to specify the type of hash (rename to just 'hash' or sth)
+        # TODO return object doesnt need to specify the type of hash (rename to just 'hash' or sth instead of 'sha1')
         obj = [{'url': self.url, 'status': self.status, 'sha1': self.url_hash}]
         return jsonify(obj)

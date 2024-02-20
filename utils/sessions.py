@@ -3,7 +3,7 @@ from datetime import datetime
 import tldextract
 
 
-# TODO make abstract? can allow for differentiation
+# TODO make abstract? can allow for different kinds of storage (in-memory, sqlite database file, mysql database, etc)
 class SessionStorage:
     """
     The storage interface for all current sessions.
