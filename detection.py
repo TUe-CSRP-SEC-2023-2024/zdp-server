@@ -99,6 +99,7 @@ def test(url, screenshot_url, uuid, pagetitle, image64) -> 'DetectionResult':
         
         # Get result from the above search
         url_list_text = db_conn_output.execute("SELECT DISTINCT result FROM search_result_text WHERE filepath = ?", [url_hash]).fetchall()
+        url_list_text = [url[0] for url in url_list_text]
 
         # Handle results of search from above
         res = check_search_results(uuid, url, url_hash, url_registered_domain, url_list_text)
@@ -120,6 +121,7 @@ def test(url, screenshot_url, uuid, pagetitle, image64) -> 'DetectionResult':
         search.handle_folder(session_file_path, url_hash)
         
         url_list_img = db_conn_output.execute("SELECT DISTINCT result FROM search_result_image WHERE filepath = ?", [url_hash]).fetchall()
+        url_list_img = [url[0] for url in url_list_img]
 
         res = check_search_results(uuid, url, url_hash, url_registered_domain, url_list_img)
         if res != None:
@@ -145,7 +147,6 @@ def test(url, screenshot_url, uuid, pagetitle, image64) -> 'DetectionResult':
         driver.set_page_load_timeout(WEB_DRIVER_TIMEOUT)
 
         for index, resulturl in enumerate(url_list_img_cmp):
-            resulturl = resulturl[0]
             if not isinstance(resulturl, str):
                 continue
             
@@ -235,7 +236,7 @@ def check_search_results(uuid, url, url_hash, url_registered_domain, found_urls)
         domain_list_tld_extract = set()
         # Get SAN names and append
         for urls in found_urls:
-            domain = domains.get_hostname(urls[0]) # TODO remove index requirement
+            domain = domains.get_hostname(urls)
             try:
                 san_names = [domain] + domains.get_san_names(domain)
             except:
