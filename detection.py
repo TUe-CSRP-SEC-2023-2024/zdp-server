@@ -148,59 +148,8 @@ def test(url, screenshot_url, uuid, pagetitle, image64) -> 'DetectionResult':
             resulturl = resulturl[0]
             if not isinstance(resulturl, str):
                 continue
-            urllower = resulturl.lower()
             
-            # TODO whyyyyyyy
-            if (("www.mijnwoordenboek.nl/puzzelwoordenboek/Dot/1" in resulturl) or 
-                    ("amsterdamvertical" in resulturl) or ("dotgroningen" in urllower) or 
-                    ("britannica" in resulturl) or 
-                    ("en.wikipedia.org/wiki/Language" in resulturl) or 
-                    (resulturl == '') or 
-                    (("horizontal" in urllower) and 
-                        not ("horizontal" in domains.get_registered_domain(resulturl)) 
-                        or (("vertical" in urllower) and not ("horizontal" in domains.get_registered_domain(resulturl))))):
-                continue
-            
-            # Take screenshot of URL and save it
-            try:
-                driver.get(resulturl)
-            except:
-                continue
-            driver.save_screenshot(out_dir + "/" + str(index) + '.png')
-
-            # image compare
-            path_a = os.path.join(session_file_path, "screen.png")
-            path_b = out_dir + "/" + str(index) + ".png"
-            emd = None
-            dct = None
-            s_sim = None
-            p_sim = None
-            orb = None
-            try:
-                emd = cl.earth_movers_distance(path_a, path_b)
-            except Exception as err:
-                main_logger.error(err)
-            try:
-                dct = cl.dct(path_a, path_b)
-            except Exception as err:
-                main_logger.error(err)
-            try:
-                s_sim = cl.structural_sim(path_a, path_b)
-            except Exception as err:
-                main_logger.error(err)
-            try:
-                p_sim = cl.pixel_sim(path_a, path_b)
-            except Exception as err:
-                main_logger.error(err)
-            try:
-                orb = cl.orb_sim(path_a, path_b)
-            except Exception as err:
-                main_logger.error(err)
-            main_logger.info(f"Compared url '{resulturl}'")
-            main_logger.info(f"Finished comparing:  emd = '{emd}', dct = '{dct}', pixel_sim = '{p_sim}', structural_sim = '{s_sim}', orb = '{orb}'")
-            
-            # return phishing if very similar
-            if ((emd < 0.001) and (s_sim > 0.70)) or ((emd < 0.002) and (s_sim > 0.80)):
+            if check_image(driver, out_dir, index, session_file_path, resulturl):
                 driver.quit()
                 
                 main_logger.info(f'[RESULT] Phishing, for url {url}, due to image comparisons')
@@ -220,6 +169,64 @@ def test(url, screenshot_url, uuid, pagetitle, image64) -> 'DetectionResult':
 
     session.set_state('inconclusive', '')
     return DetectionResult(url, url_hash, 'inconclusive')
+
+def check_image(driver, out_dir, index, session_file_path, resulturl):
+    urllower = resulturl.lower()
+
+    # TODO whyyyyyyy
+    if (("www.mijnwoordenboek.nl/puzzelwoordenboek/Dot/1" in resulturl) or 
+            ("amsterdamvertical" in resulturl) or ("dotgroningen" in urllower) or 
+            ("britannica" in resulturl) or 
+            ("en.wikipedia.org/wiki/Language" in resulturl) or 
+            (resulturl == '') or 
+            (("horizontal" in urllower) and 
+                not ("horizontal" in domains.get_registered_domain(resulturl)) 
+                or (("vertical" in urllower) and not ("horizontal" in domains.get_registered_domain(resulturl))))):
+        return False
+    
+    # Take screenshot of URL and save it
+    try:
+        driver.get(resulturl)
+    except:
+        return False
+    driver.save_screenshot(out_dir + "/" + str(index) + '.png')
+
+    # image compare
+    path_a = os.path.join(session_file_path, "screen.png")
+    path_b = out_dir + "/" + str(index) + ".png"
+    emd = None
+    dct = None
+    s_sim = None
+    p_sim = None
+    orb = None
+    try:
+        emd = cl.earth_movers_distance(path_a, path_b)
+    except Exception as err:
+        main_logger.error(err)
+    try:
+        dct = cl.dct(path_a, path_b)
+    except Exception as err:
+        main_logger.error(err)
+    try:
+        s_sim = cl.structural_sim(path_a, path_b)
+    except Exception as err:
+        main_logger.error(err)
+    try:
+        p_sim = cl.pixel_sim(path_a, path_b)
+    except Exception as err:
+        main_logger.error(err)
+    try:
+        orb = cl.orb_sim(path_a, path_b)
+    except Exception as err:
+        main_logger.error(err)
+    main_logger.info(f"Compared url '{resulturl}'")
+    main_logger.info(f"Finished comparing:  emd = '{emd}', dct = '{dct}', pixel_sim = '{p_sim}', structural_sim = '{s_sim}', orb = '{orb}'")
+    
+    # return phishing if very similar
+    if ((emd < 0.001) and (s_sim > 0.70)) or ((emd < 0.002) and (s_sim > 0.80)):
+        return True
+    
+    return False
 
 def check_search_results(uuid, url, url_hash, url_registered_domain, found_urls) -> 'DetectionResult':
     with TimeIt('SAN domain check'):
