@@ -145,24 +145,25 @@ def test(url, screenshot_url, uuid, pagetitle, image64) -> 'DetectionResult':
         driver.set_page_load_timeout(WEB_DRIVER_TIMEOUT)
 
         for index, resulturl in enumerate(url_list_img_cmp):
-            if (not isinstance(resulturl[0], str)):
+            resulturl = resulturl[0]
+            if not isinstance(resulturl, str):
                 continue
-            urllower = resulturl[0].lower()
+            urllower = resulturl.lower()
             
             # TODO whyyyyyyy
-            if (("www.mijnwoordenboek.nl/puzzelwoordenboek/Dot/1" in resulturl[0]) or 
-                    ("amsterdamvertical" in resulturl[0]) or ("dotgroningen" in urllower) or 
-                    ("britannica" in resulturl[0]) or 
-                    ("en.wikipedia.org/wiki/Language" in resulturl[0]) or 
-                    (resulturl[0] == '') or 
+            if (("www.mijnwoordenboek.nl/puzzelwoordenboek/Dot/1" in resulturl) or 
+                    ("amsterdamvertical" in resulturl) or ("dotgroningen" in urllower) or 
+                    ("britannica" in resulturl) or 
+                    ("en.wikipedia.org/wiki/Language" in resulturl) or 
+                    (resulturl == '') or 
                     (("horizontal" in urllower) and 
-                        not ("horizontal" in domains.get_registered_domain(resulturl[0])) 
-                        or (("vertical" in urllower) and not ("horizontal" in domains.get_registered_domain(resulturl[0]))))):
+                        not ("horizontal" in domains.get_registered_domain(resulturl)) 
+                        or (("vertical" in urllower) and not ("horizontal" in domains.get_registered_domain(resulturl))))):
                 continue
             
             # Take screenshot of URL and save it
             try:
-                driver.get(resulturl[0])
+                driver.get(resulturl)
             except:
                 continue
             driver.save_screenshot(out_dir + "/" + str(index) + '.png')
@@ -195,7 +196,7 @@ def test(url, screenshot_url, uuid, pagetitle, image64) -> 'DetectionResult':
                 orb = cl.orb_sim(path_a, path_b)
             except Exception as err:
                 main_logger.error(err)
-            main_logger.info(f"Compared url '{resulturl[0]}'")
+            main_logger.info(f"Compared url '{resulturl}'")
             main_logger.info(f"Finished comparing:  emd = '{emd}', dct = '{dct}', pixel_sim = '{p_sim}', structural_sim = '{s_sim}', orb = '{orb}'")
             
             # return phishing if very similar
