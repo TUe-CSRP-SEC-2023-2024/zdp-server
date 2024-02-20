@@ -46,7 +46,6 @@ html_session.browser # TODO why is this here
 logo_classifier = joblib.load('saved-classifiers/gridsearch_clf_rt_recall.joblib')
 
 
-# TODO dont return direct json string, instead some Class instance for example
 def test(url, screenshot_url, uuid, pagetitle, image64) -> 'DetectionResult':
     main_logger.info(f'''
 
