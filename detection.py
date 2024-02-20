@@ -30,7 +30,7 @@ DB_PATH_OUTPUT = "db/output_operational.db"
 DB_PATH_SESSIONS = "db/sessions.db"
 
 # Page loading timeout for web driver
-WEB_DRIVER_TIMEOUT = 5
+WEB_DRIVER_PAGE_LOAD_TIMEOUT = 5
 
 # The storage interface for the sessions
 session_storage = SessionStorage(DB_PATH_SESSIONS, False)
@@ -56,20 +56,22 @@ def test(url, screenshot_url, uuid, pagetitle, image64) -> 'DetectionResult':
 
     url_domain = domains.get_hostname(url)
     url_registered_domain = domains.get_registered_domain(url_domain)
-    url_hash = hashlib.sha1(url.encode('utf-8')).hexdigest() # TODO: switch to better hash, cause SHA-1 broken?
+    # TODO: switch to better hash, cause SHA-1 broken?
+    url_hash = hashlib.sha1(url.encode('utf-8')).hexdigest()
+
+    session_file_path = os.path.join(SESSION_FILE_STORAGE_PATH, url_hash)
+    session = session_storage.get_session(uuid, url)
 
     with TimeIt('cache check'):
-        session_file_path = os.path.join(SESSION_FILE_STORAGE_PATH, url_hash)
-        session = session_storage.get_session(uuid, url)
-
         # Check if URL is in cache or still processing
         cache_result = session.get_state()
         # main_logger.info(f"Request in cache: {cache_result}")
+
         if cache_result != None:
             # Request is already in cache, use result from that (possibly waiting until it is finished)
             if cache_result.result == 'processing':
                 time.sleep(4) # TODO: oh god
-            
+
             main_logger.info(f'[RESULT] {cache_result.result}, for url {url}, served from cache')
 
             return DetectionResult(url, url_hash, cache_result.result)
@@ -80,6 +82,7 @@ def test(url, screenshot_url, uuid, pagetitle, image64) -> 'DetectionResult':
     with TimeIt('taking screenshot'):
         # Take screenshot of requested page
         parsing = Parsing(SAVE_SCREENSHOT_FILES, pagetitle, image64, screenshot_url, store=session_file_path)
+        screenshot_width, screenshot_height = parsing.get_size()
 
     db_conn_output = sqlite3.connect(DB_PATH_OUTPUT)
 
@@ -93,9 +96,9 @@ def test(url, screenshot_url, uuid, pagetitle, image64) -> 'DetectionResult':
                                     mode="text",
                                     htmlsession=html_session,
                                     clf=logo_classifier)
-        
+
         search.handle_folder(session_file_path, url_hash)
-        
+
         # Get result from the above search
         url_list_text = db_conn_output.execute("SELECT DISTINCT result FROM search_result_text WHERE filepath = ?", [url_hash]).fetchall()
         url_list_text = [url[0] for url in url_list_text]
@@ -104,7 +107,7 @@ def test(url, screenshot_url, uuid, pagetitle, image64) -> 'DetectionResult':
         res = check_search_results(uuid, url, url_hash, url_registered_domain, url_list_text)
         if res != None:
             return res
-    
+
     # No match through text, move on to image search
     session.set_state('processing', 'imagesearch')
 
@@ -118,7 +121,7 @@ def test(url, screenshot_url, uuid, pagetitle, image64) -> 'DetectionResult':
                                     clearbit=USE_CLEARBIT_LOGO_API, 
                                     tld=url_registered_domain)
         search.handle_folder(session_file_path, url_hash)
-        
+
         url_list_img = db_conn_output.execute("SELECT DISTINCT result FROM search_result_image WHERE filepath = ?", [url_hash]).fetchall()
         url_list_img = [url[0] for url in url_list_img]
 
@@ -130,32 +133,30 @@ def test(url, screenshot_url, uuid, pagetitle, image64) -> 'DetectionResult':
 
     with TimeIt('image comparisons'):
         session.set_state('processing', 'imagecompare')
-        
+
         out_dir = os.path.join('compare_screens', url_hash)
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
+
+        # Initialize web driver
         options = Options()
         options.add_argument( "--headless" )
 
-        url_list_img_cmp = url_list_text + url_list_img
-
-        # Initialize web driver
         driver = webdriver.Chrome(options=options)
-        image_width, image_height = parsing.get_size()
-        driver.set_window_size(image_width, image_height)
-        driver.set_page_load_timeout(WEB_DRIVER_TIMEOUT)
+        driver.set_window_size(screenshot_width, screenshot_height)
+        driver.set_page_load_timeout(WEB_DRIVER_PAGE_LOAD_TIMEOUT)
 
-        for index, resulturl in enumerate(url_list_img_cmp):
+        for index, resulturl in enumerate(url_list_text + url_list_img):
             if not isinstance(resulturl, str):
                 continue
-            
+
             if check_image(driver, out_dir, index, session_file_path, resulturl):
                 driver.quit()
-                
+
                 main_logger.info(f'[RESULT] Phishing, for url {url}, due to image comparisons')
 
                 session.set_state('phishing', '')
-                
+
                 return DetectionResult(url, url_hash, 'phishing')
             #otherwise go to next
 
@@ -164,7 +165,7 @@ def test(url, screenshot_url, uuid, pagetitle, image64) -> 'DetectionResult':
     # if the inconclusive stems from google blocking:
     #   e.g. blocked == True
     #   result: inconclusive_blocked
-    
+
     main_logger.info(f'[RESULT] Inconclusive, for url {url}')
 
     session.set_state('inconclusive', '')
