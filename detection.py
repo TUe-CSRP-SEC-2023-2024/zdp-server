@@ -195,34 +195,32 @@ def check_image(driver, out_dir, index, session_file_path, resulturl):
     # image compare
     path_a = os.path.join(session_file_path, "screen.png")
     path_b = out_dir + "/" + str(index) + ".png"
-    emd = None
-    dct = None
-    s_sim = None
-    p_sim = None
-    orb = None
+
+    emd, s_sim = None, None
     try:
         emd = cl.earth_movers_distance(path_a, path_b)
     except Exception as err:
         main_logger.error(err)
-    try:
-        dct = cl.dct(path_a, path_b)
-    except Exception as err:
-        main_logger.error(err)
+    # try:
+    #     dct = cl.dct(path_a, path_b)
+    # except Exception as err:
+    #     main_logger.error(err)
     try:
         s_sim = cl.structural_sim(path_a, path_b)
     except Exception as err:
         main_logger.error(err)
-    try:
-        p_sim = cl.pixel_sim(path_a, path_b)
-    except Exception as err:
-        main_logger.error(err)
-    try:
-        orb = cl.orb_sim(path_a, path_b)
-    except Exception as err:
-        main_logger.error(err)
+    # try:
+    #     p_sim = cl.pixel_sim(path_a, path_b)
+    # except Exception as err:
+    #     main_logger.error(err)
+    # try:
+    #     orb = cl.orb_sim(path_a, path_b)
+    # except Exception as err:
+    #     main_logger.error(err)
     main_logger.info(f"Compared url '{resulturl}'")
-    main_logger.info(f"Finished comparing:  emd = '{emd}', dct = '{dct}', pixel_sim = '{p_sim}', structural_sim = '{s_sim}', orb = '{orb}'")
-    
+    # main_logger.info(f"Finished comparing:  emd = '{emd}', dct = '{dct}', pixel_sim = '{p_sim}', structural_sim = '{s_sim}', orb = '{orb}'")
+    main_logger.info(f"Finished comparing:  emd = '{emd}', structural_sim = '{s_sim}'")
+
     # return phishing if very similar
     if ((emd < 0.001) and (s_sim > 0.70)) or ((emd < 0.002) and (s_sim > 0.80)):
         return True
