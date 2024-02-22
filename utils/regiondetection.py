@@ -11,15 +11,19 @@ import math
 from utils.customlogger import CustomLogger
 main_logger = CustomLogger().main_logger
 
-# Get the number of unique colours and the percentage of the primary colour in the given image
+
 def _count_colours(image : cv2.typing.MatLike):
+    """
+    Get the number of unique colours and the percentage of the primary colour in the given image.
+    """
+    
     # Flatten the image to a 2D array
     flattend_image = image.reshape(-1, image.shape[-1])
     
     # Get the unique colors and the number of times each appears in the image
     unique_colors, unique_colors_pixels = np.unique(flattend_image, axis = 0, return_counts = True) 
     
-    primary_color_percentage = np.amax(unique_colors_pixels, initial = 0) / max(np.sum(unique_colors_pixels), initial = 1) * 100
+    primary_color_percentage = np.amax(unique_colors_pixels, initial = 0) / max(np.sum(unique_colors_pixels), 1) * 100
     
     return len(unique_colors), primary_color_percentage
 
