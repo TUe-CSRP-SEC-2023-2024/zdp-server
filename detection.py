@@ -158,11 +158,11 @@ def test(url, screenshot_url, uuid, pagetitle, image64) -> 'DetectionResult':
                 session.set_state('phishing', '')
 
                 return DetectionResult(url, url_hash, 'phishing')
-            #otherwise go to next
+            # Otherwise go to next
 
     driver.quit()
 
-    # if the inconclusive stems from google blocking:
+    # If the inconclusive stems from google blocking:
     #   e.g. blocked == True
     #   result: inconclusive_blocked
 
@@ -192,7 +192,7 @@ def check_image(driver, out_dir, index, session_file_path, resulturl):
         return False
     driver.save_screenshot(out_dir + "/" + str(index) + '.png')
 
-    # image compare
+    # Image compare
     path_a = os.path.join(session_file_path, "screen.png")
     path_b = out_dir + "/" + str(index) + ".png"
 
@@ -253,7 +253,7 @@ def check_search_results(uuid, url, url_hash, url_registered_domain, found_urls)
         
         return DetectionResult(url, url_hash, 'not phishing')
 
-    # no results yet
+    # No results yet
     return None
 
 # TODO overlaps with State in sessions.py, merge them or sth
