@@ -11,7 +11,6 @@ import math
 from utils.customlogger import CustomLogger
 main_logger = CustomLogger().main_logger
 
-
 def _count_colours(image : cv2.typing.MatLike):
     """
     Get the number of unique colours and the percentage of the primary colour in the given image.
@@ -27,40 +26,44 @@ def _count_colours(image : cv2.typing.MatLike):
     
     return len(unique_colors), primary_color_percentage
 
-# Draw the detected regions on the originial image
+
 def _draw_regions(image: cv2.typing.MatLike, img_path: str, regions: list, highlight_name: str):
-        draw_img = np.copy(image)
-        
-        for index, region in enumerate(regions):
-            main_logger.debug(f"Drawing region #{index}")
-            
-            region_height, region_width, _ = region[0].shape
-            x = region[2]
-            y = region[3]
-            
-            color_int = random.randint(0, 2)
-            colors = [(0,0,255), (0,255,0), (255,0,0)]
-            color = colors[color_int]
-            
-            flip = (random.randint(0, 1) == 1)
-            
-            cv2.rectangle(draw_img, (x - 5, y - 5), (x + region_width - 5, y + region_height - 5), color, 1)
-            
-            if region[7]:
-                text = "-" + str(region[1])
-            else:
-                text = str(region[1])
-                
-            if flip:
-                cv2.putText(draw_img, text, (x + region_width - random.randint(-5, 5), y + region_height-random.randint(-5, 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-            else:
-                cv2.putText(draw_img, text, (x - random.randint(-5, 5), y - random.randint(-5, 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+    """
+    Draw the detected regions on the originial image.
+    """
+
+    draw_img = np.copy(image)
     
-            # TODO: Add subregion drawing
-            #if subregiondraw:
-            #     cv2.imwrite(f"{highlightname}.subregion.{idx}.png", region[0])
+    for index, region in enumerate(regions):
+        main_logger.debug(f"Drawing region #{index}")
+        
+        region_height, region_width, _ = region[0].shape
+        x = region[2]
+        y = region[3]
+        
+        color_int = random.randint(0, 2)
+        colors = [(0,0,255), (0,255,0), (255,0,0)]
+        color = colors[color_int]
+        
+        flip = (random.randint(0, 1) == 1)
+        
+        cv2.rectangle(draw_img, (x - 5, y - 5), (x + region_width - 5, y + region_height - 5), color, 1)
+        
+        if region[7]:
+            text = "-" + str(region[1])
+        else:
+            text = str(region[1])
             
-        cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(img_path)), f"{highlight_name}.png"), draw_img)
+        if flip:
+            cv2.putText(draw_img, text, (x + region_width - random.randint(-5, 5), y + region_height-random.randint(-5, 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+        else:
+            cv2.putText(draw_img, text, (x - random.randint(-5, 5), y - random.randint(-5, 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+        #TODO: Add subregion drawing
+        # if subregion_draw:
+        #     cv2.imwrite(f"{highlight_name}.subregion.{index}.png", region[0])
+            
+    cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(img_path)), f"{highlight_name}.png"), draw_img)
 
 # TODO: Add drawing capabilities for recursive and try to split the function into smaller parts
 def _find_regions(image : cv2.typing.MatLike, image_path : str, draw : bool, highlight_name : str, invert = True):
@@ -202,16 +205,6 @@ def find_regions (image_path : str, draw_flag = FLAG_DRAW, highlight_name = "Hig
 
     return regions_of_interest, img_data
     
-# Deprecated
-def findregions(imgpath, draw=True, recursivedraw=False, subregiondraw=False, highlightname="Highlight"):
-    """
-    This function is deprecated. Use find_regions() instead.
-    ------
-    """
-    
-    return find_regions(imgpath, draw_flag = FLAG_DRAW_RECUSRIVE, highlight_name = highlightname)
-
-# Deprecated
 # def _findregions(image, imgpath, draw = True, highlight_name="Highlight", invert=True):
 #     """
 #     This function is deprecated. Use _find_regions() instead.

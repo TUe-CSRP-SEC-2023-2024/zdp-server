@@ -164,7 +164,7 @@ class ReverseImageSearch():
         Calculate the probabilities of a region being a logo and store it.
         """
 
-        poi, imgdata = regiondetection.findregions(img_path)
+        poi, imgdata = regiondetection.find_regions(img_path)
         self._main_logger.info("Regions found: " + str(len(poi)))
         
         try:
