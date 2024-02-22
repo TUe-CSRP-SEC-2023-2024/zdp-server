@@ -184,7 +184,7 @@ def find_regions (image_path : str, draw_flag = FLAG_DRAW, highlight_name = "Hig
         highlight_name (str, optional): The name of the file to save the highlighted image. Defaults to "Highlight".
     """
     
-    if(draw_flag < FLAG_NO_DRAW or draw_flag > FLAG_DRAW_RECUSRIVE):
+    if draw_flag < FLAG_NO_DRAW or draw_flag > FLAG_DRAW_RECUSRIVE:
         raise ValueError("Invalid draw_flag")
         
     draw = draw_flag != FLAG_NO_DRAW
