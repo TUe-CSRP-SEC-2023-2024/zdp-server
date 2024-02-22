@@ -5,7 +5,7 @@ import scipy.stats as ss
 from pywt import dwt2
 import random
 import math
-from enum import Enum, auto
+from enum import Enum
 
 # Set up logging
 from utils.customlogger import CustomLogger
