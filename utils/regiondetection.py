@@ -65,7 +65,6 @@ def _draw_regions(image: cv2.typing.MatLike, img_path: str, regions: list, highl
             
     cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(img_path)), f"{highlight_name}.png"), draw_img)
 
-# TODO: Add drawing capabilities for recursive and try to split the function into smaller parts
 def _find_regions(image : cv2.typing.MatLike, image_path : str, draw : bool, highlight_name : str, invert = True):
     
     contours, hier = _get_contours(image, invert)
