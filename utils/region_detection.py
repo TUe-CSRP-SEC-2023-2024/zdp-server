@@ -11,6 +11,42 @@ from enum import Enum
 from utils.customlogger import CustomLogger
 main_logger = CustomLogger().main_logger
 
+class RegionData:
+    region = None
+    index = None
+    x = None
+    y = None
+    unique_colors_count = None
+    pct = None
+    hierarchy = None
+    invert = None
+    mean = None
+    std = None
+    skew = None
+    kurtosis = None
+    entropy = None
+    otsu = None
+    energy = None
+    occupied_bins = None
+    
+    def __init__(self, region, index, x, y, unique_colors_count, pct, hierarchy, invert, mean, std, skew, kurtosis, entropy, otsu, energy, occupied_bins):
+        self.region = region
+        self.index = index
+        self.x = x
+        self.y = y
+        self.unique_colors_count = unique_colors_count
+        self.pct = pct
+        self.hierarchy = hierarchy
+        self.invert = invert
+        self.mean = mean
+        self.std = std
+        self.skew = skew
+        self.kurtosis = kurtosis
+        self.entropy = entropy
+        self.otsu = otsu
+        self.energy = energy
+        self.occupied_bins = occupied_bins
+
 def _count_colours(image : cv2.typing.MatLike):
     """
     Get the number of unique colours and the percentage of the primary colour in the given image.
@@ -27,19 +63,19 @@ def _count_colours(image : cv2.typing.MatLike):
     return len(unique_colors), primary_color_percentage
 
 
-def _draw_regions(image: cv2.typing.MatLike, image_path: str, regions: list, highlight_name: str, subregion_draw = False):
+def _draw_regions(image: cv2.typing.MatLike, image_path: str, regions_data: list[RegionData], highlight_name: str, subregion_draw = False):
     """
     Draw the detected regions on the originial image.
     """
 
     draw_image = np.copy(image)
     
-    for index, region in enumerate(regions):
+    for index, region_data in enumerate(regions_data):
         main_logger.debug(f"Drawing region #{index}")
         
-        region_height, region_width, _ = region[0].shape
-        x = region[2]
-        y = region[3]
+        region_height, region_width, _ = region_data.region.shape
+        x = region_data.x
+        y = region_data.y
         
         color_int = random.randint(0, 2)
         colors = [(0,0,255), (0,255,0), (255,0,0)]
@@ -49,45 +85,44 @@ def _draw_regions(image: cv2.typing.MatLike, image_path: str, regions: list, hig
         
         cv2.rectangle(draw_image, (x - 5, y - 5), (x + region_width - 5, y + region_height - 5), color, 1)
         
-        if region[7]:
-            text = "-" + str(region[1])
+        if region_data.invert:
+            text = "-" + str(region_data.index)
         else:
-            text = str(region[1])
+            text = str(region_data.index)
             
         if flip:
             cv2.putText(draw_image, text, (x + region_width - random.randint(-5, 5), y + region_height-random.randint(-5, 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
         else:
             cv2.putText(draw_image, text, (x - random.randint(-5, 5), y - random.randint(-5, 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-        #TODO: Add subregion drawing
         if subregion_draw:
-            cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(image_path)), f"{highlight_name}.subregion.{index}.png"), region[0])
+            cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(image_path)), f"{highlight_name}.subregion.{index}.png"), region_data.region)
             
     cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(image_path)), f"{highlight_name}.png"), draw_image)
-    
+
 def _find_regions(image : cv2.typing.MatLike, image_path : str, draw : bool, highlight_name : str, invert = True):
     
     draw_image = np.copy(image)
     
     contours, hier = _get_contours(image, invert, image_path, draw, highlight_name)
     
-    regions = []
+    regions_data = []
 
     for index, contour in enumerate(contours):
         [x, y, w, h] = cv2.boundingRect(contour)
 
         # Adding small padding to image for slight context and better search accuracy
         margin = 5
-        region = image[max(0, y - margin) : y + h + margin, max(0, x - margin) : x + w + margin]
+        region_data = image[max(0, y - margin) : y + h + margin, max(0, x - margin) : x + w + margin]
         
-        unique_colors_count, pct = _count_colours(region)
+        unique_colors_count, pct = _count_colours(region_data)
         # also get a greyscale version of the region for the other attributes
         # (see paper by Evdoxios Baratis and Euripides G.M. Petrakis why this is)
 
-        if (region.size == 0):
+        if (region_data.size == 0):
             continue
         
-        r_grey = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
+        r_grey = cv2.cvtColor(region_data, cv2.COLOR_BGR2GRAY)
 
         # Image info
         mean = np.mean(r_grey, axis = None)
@@ -119,15 +154,15 @@ def _find_regions(image : cv2.typing.MatLike, image_path : str, draw : bool, hig
 
 
         if len(hier) > 0:
-            regions.append((region, index, x, y, unique_colors_count, pct, hier[0][index], invert, mean, std, skew, kurtosis, entropy, otsu, energy, occupied_bins))
+            regions_data.append(RegionData(region_data, index, x, y, unique_colors_count, pct, hier[0][index], invert, mean, std, skew, kurtosis, entropy, otsu, energy, occupied_bins))
         else:
-            regions.append((region, index, x, y, unique_colors_count, pct, [-2, -2, -2, -2], invert, mean, std, skew, kurtosis, entropy, otsu, energy, occupied_bins))
+            regions_data.append(RegionData(region_data, index, x, y, unique_colors_count, pct, [-2, -2, -2, -2], invert, mean, std, skew, kurtosis, entropy, otsu, energy, occupied_bins))
        
     if draw:
         cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(image_path)), f"{highlight_name}.png"), draw_image)
         main_logger.debug("Wrote image highlighting the regions to: " + highlight_name)
         
-    return regions
+    return regions_data
 
 def _get_contours(image : cv2.typing.MatLike, invert : bool, image_path: str, draw : bool, highlight_name : str = "Highlight"):
     
@@ -170,25 +205,25 @@ def _get_contours(image : cv2.typing.MatLike, invert : bool, image_path: str, dr
     main_logger.debug("Storing valid contours")
     return contours,hier
 
-def _validate_regions(regions : list):
-    regions_of_interest = []
+def _validate_regions(regions_data : list[RegionData]) -> list[RegionData]:
+    regions_of_interest : list[RegionData] = []
     
-    for index, region in enumerate(regions):
-        region_height, region_width, _ = region[0].shape
+    for index, region_data in enumerate(regions_data):
+        region_height, region_width, _ = region_data.region.shape
 
-        for index2, region2 in enumerate(regions):
+        for index2, region_data2 in enumerate(regions_data):
             # Skip the same region. We do not want to compare the same region with itself
             if index == index2:
                 continue
             
-            region_height2, region_width2, _ = region2[0].shape
-            if region[2] >= region2[2] and (region[2] + region_width <= region2[2] + region_width2):
+            region_height2, region_width2, _ = region_data2.region.shape
+            if region_data.x >= region_data2.x and (region_data.x + region_width <= region_data2.x + region_width2):
                 # On x axis region1 is contained within region2
-                if region[3] >= region2[3] and (region[3] + region_height <= region2[3] + region_height2):
+                if region_data.y >= region_data2.y and (region_data.y + region_height <= region_data2.y + region_height2):
                     # On y axis region 1 is contained within region2
                     continue
         
-        regions_of_interest.append(region)
+        regions_of_interest.append(region_data)
         
     return regions_of_interest
 
@@ -209,7 +244,7 @@ class DrawingFlags(Enum):
     FLAG_DRAW_ALL = 4
     """Tells the function to draw all the regions, subregions and changes made to the image."""
 
-def find_regions (image_path : str, draw_flag = DrawingFlags.FLAG_DRAW, highlight_name = "Highlight"):
+def find_regions (image_path : str, draw_flag = DrawingFlags.FLAG_DRAW, highlight_name = "Highlight") -> tuple[list[RegionData], tuple[int, int, int]]:
     """
     Finds all the regions of interest in the image and returns the data of the image.
     
@@ -228,10 +263,10 @@ def find_regions (image_path : str, draw_flag = DrawingFlags.FLAG_DRAW, highligh
     
     img_data = (_count_colours(image), image.shape[0], image.shape[1])
     
-    regions = _find_regions(image, image_path, recursive_draw, highlight_name = f"{highlight_name}.allregions.inverted", invert = True)
-    regions += _find_regions(image, image_path, recursive_draw, highlight_name = f"{highlight_name}.allregions.not_inverted", invert = False)
+    regions_data = _find_regions(image, image_path, recursive_draw, highlight_name = f"{highlight_name}.allregions.inverted", invert = True)
+    regions_data += _find_regions(image, image_path, recursive_draw, highlight_name = f"{highlight_name}.allregions.not_inverted", invert = False)
     
-    regions_of_interest = _validate_regions(regions)
+    regions_of_interest = _validate_regions(regions_data)
         
     if draw:
         _draw_regions(image, image_path, regions_of_interest, f"{highlight_name}.allregions", subregion_draw)
