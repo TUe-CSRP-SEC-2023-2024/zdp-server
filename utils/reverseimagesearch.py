@@ -6,7 +6,7 @@ import numpy as np
 from utils.customlogger import CustomLogger
 import utils.utils as ut
 import utils.region_detection as region_detection
-from region_detection import RegionData    
+from utils.region_detection import RegionData    
 
 import searchengine
 
