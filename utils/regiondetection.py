@@ -2,10 +2,10 @@ import cv2
 import os.path
 import numpy as np
 import scipy.stats as ss
-from PIL import Image
 from pywt import dwt2
 import random
 import math
+from enum import Enum, auto
 
 # Set up logging
 from utils.customlogger import CustomLogger
@@ -27,7 +27,7 @@ def _count_colours(image : cv2.typing.MatLike):
     return len(unique_colors), primary_color_percentage
 
 
-def _draw_regions(image: cv2.typing.MatLike, img_path: str, regions: list, highlight_name: str):
+def _draw_regions(image: cv2.typing.MatLike, img_path: str, regions: list, highlight_name: str, subregion_draw = False):
     """
     Draw the detected regions on the originial image.
     """
@@ -60,8 +60,8 @@ def _draw_regions(image: cv2.typing.MatLike, img_path: str, regions: list, highl
             cv2.putText(draw_img, text, (x - random.randint(-5, 5), y - random.randint(-5, 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
         #TODO: Add subregion drawing
-        # if subregion_draw:
-        #     cv2.imwrite(f"{highlight_name}.subregion.{index}.png", region[0])
+        if subregion_draw:
+            cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(img_path)), f"{highlight_name}.subregion.{index}.png"), region[0])
             
     cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(img_path)), f"{highlight_name}.png"), draw_img)
 
@@ -167,16 +167,24 @@ def _validate_regions(regions : list):
         
     return regions_of_interest
 
-FLAG_NO_DRAW = 0
-"""Tells the function to **NOT** draw any debugging images.""" 
+class DrawingFlags(Enum):
+    
+    FLAG_NO_DRAW = 0
+    """Tells the function to **NOT** draw any debugging images.""" 
 
-FLAG_DRAW = 1
-"""Tells the function to draw the regions on the original image.""" 
+    FLAG_DRAW = 1
+    """Tells the function to draw the regions on the original image.""" 
 
-FLAG_DRAW_RECUSRIVE = 2
-"""Tells the function to draw the regions and subregions.""" 
+    FLAG_DRAW_RECURSIVE = 2
+    """Tells the function to draw the regions and the changes applied to the image.""" 
 
-def find_regions (image_path : str, draw_flag = FLAG_DRAW, highlight_name = "Highlight"):
+    FLAG_SUBREGION_DRAW = 3
+    """Tells the function to draw the regions and subregions."""	
+    
+    FLAG_DRAW_ALL = 4
+    """Tells the function to draw all the regions, subregions and changes made to the image."""
+
+def find_regions (image_path : str, draw_flag = DrawingFlags.FLAG_DRAW, highlight_name = "Highlight"):
     """
     Finds all the regions of interest in the image and returns the data of the image.
     
@@ -185,12 +193,10 @@ def find_regions (image_path : str, draw_flag = FLAG_DRAW, highlight_name = "Hig
         draw_flag (int, optional): The flag to tell the function to draw the regions. Defaults to FLAG_DRAW.
         highlight_name (str, optional): The name of the file to save the highlighted image. Defaults to "Highlight".
     """
-    
-    if draw_flag < FLAG_NO_DRAW or draw_flag > FLAG_DRAW_RECUSRIVE:
-        raise ValueError("Invalid draw_flag")
         
-    draw = draw_flag != FLAG_NO_DRAW
-    recursive_draw = draw_flag == FLAG_DRAW_RECUSRIVE
+    draw = draw_flag != DrawingFlags.FLAG_NO_DRAW
+    recursive_draw = draw_flag == DrawingFlags.FLAG_DRAW_RECURSIVE or draw_flag == DrawingFlags.FLAG_DRAW_ALL
+    subregion_draw = draw_flag == DrawingFlags.FLAG_SUBREGION_DRAW or draw_flag == DrawingFlags.FLAG_DRAW_ALL
     
     main_logger.debug("Loading image: " + image_path)
     image = cv2.imread(image_path, cv2.IMREAD_COLOR)
@@ -203,7 +209,7 @@ def find_regions (image_path : str, draw_flag = FLAG_DRAW, highlight_name = "Hig
     regions_of_interest = _validate_regions(regions)
         
     if draw:
-        _draw_regions(image, image_path, regions_of_interest, f"{highlight_name}.allregions")
+        _draw_regions(image, image_path, regions_of_interest, f"{highlight_name}.allregions", subregion_draw)
 
     return regions_of_interest, img_data
     
