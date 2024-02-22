@@ -27,12 +27,12 @@ def _count_colours(image : cv2.typing.MatLike):
     return len(unique_colors), primary_color_percentage
 
 
-def _draw_regions(image: cv2.typing.MatLike, img_path: str, regions: list, highlight_name: str, subregion_draw = False):
+def _draw_regions(image: cv2.typing.MatLike, image_path: str, regions: list, highlight_name: str, subregion_draw = False):
     """
     Draw the detected regions on the originial image.
     """
 
-    draw_img = np.copy(image)
+    draw_image = np.copy(image)
     
     for index, region in enumerate(regions):
         main_logger.debug(f"Drawing region #{index}")
@@ -47,7 +47,7 @@ def _draw_regions(image: cv2.typing.MatLike, img_path: str, regions: list, highl
         
         flip = (random.randint(0, 1) == 1)
         
-        cv2.rectangle(draw_img, (x - 5, y - 5), (x + region_width - 5, y + region_height - 5), color, 1)
+        cv2.rectangle(draw_image, (x - 5, y - 5), (x + region_width - 5, y + region_height - 5), color, 1)
         
         if region[7]:
             text = "-" + str(region[1])
@@ -55,19 +55,21 @@ def _draw_regions(image: cv2.typing.MatLike, img_path: str, regions: list, highl
             text = str(region[1])
             
         if flip:
-            cv2.putText(draw_img, text, (x + region_width - random.randint(-5, 5), y + region_height-random.randint(-5, 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            cv2.putText(draw_image, text, (x + region_width - random.randint(-5, 5), y + region_height-random.randint(-5, 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
         else:
-            cv2.putText(draw_img, text, (x - random.randint(-5, 5), y - random.randint(-5, 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            cv2.putText(draw_image, text, (x - random.randint(-5, 5), y - random.randint(-5, 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
         #TODO: Add subregion drawing
         if subregion_draw:
-            cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(img_path)), f"{highlight_name}.subregion.{index}.png"), region[0])
+            cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(image_path)), f"{highlight_name}.subregion.{index}.png"), region[0])
             
-    cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(img_path)), f"{highlight_name}.png"), draw_img)
-
+    cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(image_path)), f"{highlight_name}.png"), draw_image)
+    
 def _find_regions(image : cv2.typing.MatLike, image_path : str, draw : bool, highlight_name : str, invert = True):
     
-    contours, hier = _get_contours(image, invert)
+    draw_image = np.copy(image)
+    
+    contours, hier = _get_contours(image, invert, image_path, draw, highlight_name)
     
     regions = []
 
@@ -111,35 +113,59 @@ def _find_regions(image : cv2.typing.MatLike, image_path : str, draw : bool, hig
         # Number of shades of grey
         int_hist = cv2.calcHist([r_grey], [0], None, [256], [0, 256]).flatten()
         occupied_bins = np.count_nonzero(int_hist)
+        
+        if draw:
+            cv2.rectangle(draw_image,(x-margin,y-margin),(x+w+margin,y+h+margin),(0,0,255),1)
+
 
         if len(hier) > 0:
             regions.append((region, index, x, y, unique_colors_count, pct, hier[0][index], invert, mean, std, skew, kurtosis, entropy, otsu, energy, occupied_bins))
         else:
             regions.append((region, index, x, y, unique_colors_count, pct, [-2, -2, -2, -2], invert, mean, std, skew, kurtosis, entropy, otsu, energy, occupied_bins))
-            
+       
+    if draw:
+        cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(image_path)), f"{highlight_name}.png"), draw_image)
+        main_logger.debug("Wrote image highlighting the regions to: " + highlight_name)
+        
     return regions
 
-def _get_contours(image, invert):
+def _get_contours(image : cv2.typing.MatLike, invert : bool, image_path: str, draw : bool, highlight_name : str = "Highlight"):
+    
     main_logger.debug("Obtaining grayscale version of image")
-    img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    processed_img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
+    if draw:
+        cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(image_path)), f"{highlight_name}-0-grey.png"),  processed_img)
     
     main_logger.debug("Thresholding the image")
     if invert:
-        cv2.threshold(img, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU, img)
+        cv2.threshold(processed_img, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU, processed_img)
     else:
-        cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU, img)
-        
+        cv2.threshold(processed_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU, processed_img)
+    
+    if draw:
+        cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(image_path)), f"{highlight_name}-1-tresh.png"),  processed_img)
+    
     main_logger.debug("Dilating")
-    img = cv2.dilate(img, cv2.getStructuringElement(cv2.MORPH_RECT, (7, 5)), iterations = 1)
+    processed_img = cv2.dilate(processed_img, cv2.getStructuringElement(cv2.MORPH_RECT, (7, 5)), iterations = 1)
+    
+    if draw:
+        cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(image_path)), f"{highlight_name}-2-dilating.png"),  processed_img)
 
     main_logger.debug("Morphing to merge close area's")
-    img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5)))
+    processed_img = cv2.morphologyEx(processed_img, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5)))
+    
+    if draw:
+        cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(image_path)), f"{highlight_name}-3-inter.png"),  processed_img)
     
     main_logger.debug("Eroding")
-    img = cv2.erode(img, cv2.getStructuringElement(cv2.MORPH_RECT, (4, 4)), iterations = 1)
+    processed_img = cv2.erode(processed_img, cv2.getStructuringElement(cv2.MORPH_RECT, (4, 4)), iterations = 1)
     
+    if draw:
+        cv2.imwrite(os.path.join(os.path.dirname(os.path.realpath(image_path)), f"{highlight_name}-4-eroding.png"),  processed_img)
+
     main_logger.debug("Finding contours")
-    contours, hier = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours, hier = cv2.findContours(processed_img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     
     main_logger.debug("Storing valid contours")
     return contours,hier
@@ -188,7 +214,7 @@ def find_regions (image_path : str, draw_flag = DrawingFlags.FLAG_DRAW, highligh
     Finds all the regions of interest in the image and returns the data of the image.
     
     Args:
-        img_path (str): The path (location) of the image.
+        image_path (str): The path (location) of the image.
         draw_flag (int, optional): The flag to tell the function to draw the regions. Defaults to FLAG_DRAW.
         highlight_name (str, optional): The name of the file to save the highlighted image. Defaults to "Highlight".
     """
@@ -220,39 +246,18 @@ def find_regions (image_path : str, draw_flag = DrawingFlags.FLAG_DRAW, highligh
     
 #     _find_regions(image, imgpath, draw, highlight_name, invert)
     
-    # if draw:
-    #     drawimg = np.copy(image)
+
 
     # main_logger.debug("Obtaining grayscale version of image")
     # img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    # if draw:
-    #     cv2.imwrite(f"{highlight_name}-0-grey.png", img)
-        
+
     # main_logger.debug("Thresholding the image")
     # if invert:
     #     cv2.threshold(img, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU,img)
     # else:
     #     cv2.threshold(img, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU,img)
     
-    # if draw:
-    #     cv2.imwrite(f"{highlight_name}-0-tresh.png", img)
 
-    # main_logger.debug("Dilating")
-    # img = cv2.dilate(img, cv2.getStructuringElement(cv2.MORPH_RECT, (7, 5)), iterations=1)
-    # if draw:
-    #     cv2.imwrite(f"{highlight_name}-1-dilating.png", img)
-
-    # main_logger.debug("Morphing to merge close area's")
-    # #img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (7, 4)))
-    # img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (5,5)))
-    
-    # if draw:
-    #     cv2.imwrite(f"{highlight_name}-2-inter.png", img)
-
-    # main_logger.debug("Eroding")
-    # img = cv2.erode(img, cv2.getStructuringElement(cv2.MORPH_RECT, (4, 4)), iterations=1);
-    # if draw:
-    #     cv2.imwrite(f"{highlight_name}-3-eroding.png", img)
 
     # main_logger.debug("Finding contours")
     # contours, hier = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -311,8 +316,5 @@ def find_regions (image_path : str, draw_flag = DrawingFlags.FLAG_DRAW, highligh
     #             roi.append((r, i, x, y, ccnt, pct, [-2, -2, -2, -2], invert, mean, std, skew, kurtosis, entropy, otsu, energy, occupied_bins))
     #         count += 1
             
-    # if draw:
-    #     cv2.imwrite(f"{highlight_name}.png", drawimg)
-    #     main_logger.debug("Wrote image highlighting the regions to: " + highlight_name)
-        
+
     # return roi
