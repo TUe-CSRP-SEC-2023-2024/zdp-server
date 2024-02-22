@@ -68,28 +68,7 @@ def _draw_regions(image: cv2.typing.MatLike, img_path: str, regions: list, highl
 # TODO: Add drawing capabilities for recursive and try to split the function into smaller parts
 def _find_regions(image : cv2.typing.MatLike, image_path : str, draw : bool, highlight_name : str, invert = True):
     
-    main_logger.debug("Obtaining grayscale version of image")
-    img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    
-    main_logger.debug("Thresholding the image")
-    if invert:
-        cv2.threshold(img, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU, img)
-    else:
-        cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU, img)
-        
-    main_logger.debug("Dilating")
-    img = cv2.dilate(img, cv2.getStructuringElement(cv2.MORPH_RECT, (7, 5)), iterations = 1)
-
-    main_logger.debug("Morphing to merge close area's")
-    img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5)))
-    
-    main_logger.debug("Eroding")
-    img = cv2.erode(img, cv2.getStructuringElement(cv2.MORPH_RECT, (4, 4)), iterations = 1)
-    
-    main_logger.debug("Finding contours")
-    contours, hier = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    
-    main_logger.debug("Storing valid contours")
+    contours, hier = _get_contours(image, invert)
     
     regions = []
 
@@ -99,8 +78,6 @@ def _find_regions(image : cv2.typing.MatLike, image_path : str, draw : bool, hig
         # Adding small padding to image for slight context and better search accuracy
         margin = 5
         region = image[max(0, y - margin) : y + h + margin, max(0, x - margin) : x + w + margin]
-
-        # Always true - region constraints could be applied here
         
         unique_colors_count, pct = _count_colours(region)
         # also get a greyscale version of the region for the other attributes
@@ -142,6 +119,31 @@ def _find_regions(image : cv2.typing.MatLike, image_path : str, draw : bool, hig
             regions.append((region, index, x, y, unique_colors_count, pct, [-2, -2, -2, -2], invert, mean, std, skew, kurtosis, entropy, otsu, energy, occupied_bins))
             
     return regions
+
+def _get_contours(image, invert):
+    main_logger.debug("Obtaining grayscale version of image")
+    img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
+    main_logger.debug("Thresholding the image")
+    if invert:
+        cv2.threshold(img, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU, img)
+    else:
+        cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU, img)
+        
+    main_logger.debug("Dilating")
+    img = cv2.dilate(img, cv2.getStructuringElement(cv2.MORPH_RECT, (7, 5)), iterations = 1)
+
+    main_logger.debug("Morphing to merge close area's")
+    img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5)))
+    
+    main_logger.debug("Eroding")
+    img = cv2.erode(img, cv2.getStructuringElement(cv2.MORPH_RECT, (4, 4)), iterations = 1)
+    
+    main_logger.debug("Finding contours")
+    contours, hier = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    
+    main_logger.debug("Storing valid contours")
+    return contours,hier
 
 def _validate_regions(regions : list):
     regions_of_interest = []
