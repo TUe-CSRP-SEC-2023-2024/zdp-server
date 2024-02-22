@@ -93,53 +93,53 @@ def _find_regions(image : cv2.typing.MatLike, image_path : str, draw : bool, hig
     
     regions = []
 
-    if len(contours) != 0:
-        for index, contour in enumerate(contours):
-            [x, y, w, h] = cv2.boundingRect(contour)
+    for index, contour in enumerate(contours):
+        [x, y, w, h] = cv2.boundingRect(contour)
 
-            # Adding small padding to image for slight context and better search accuracy
-            margin = 5
-            region = image[max(0, y - margin) : y + h + margin, max(0, x - margin) : x + w + margin]
+        # Adding small padding to image for slight context and better search accuracy
+        margin = 5
+        region = image[max(0, y - margin) : y + h + margin, max(0, x - margin) : x + w + margin]
 
-            # Always true - region constraints could be applied here
+        # Always true - region constraints could be applied here
+        
+        unique_colors_count, pct = _count_colours(region)
+        # also get a greyscale version of the region for the other attributes
+        # (see paper by Evdoxios Baratis and Euripides G.M. Petrakis why this is)
+
+        if (region.size == 0):
+            continue
+        
+        r_grey = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
+
+        # Image info
+        mean = np.mean(r_grey, axis = None)
+        std = np.std(r_grey, axis = None)
+        skew = ss.skew(r_grey, axis = None)
+        kurtosis = ss.kurtosis(r_grey, axis = None)
+        entropy = ss.entropy(r_grey, axis = None)
+
+        #Otsu threshold
+        otsu = 0
+        if invert:
+            otsu = cv2.threshold(r_grey, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[0]
+        else:
+            otsu = cv2.threshold(r_grey, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[0]
+
+        # Energy
+        _, (cH, cV, cD) = dwt2(r_grey.T, 'db1')
+        energy = (cH**2 + cV**2 + cD**2).sum()/r_grey.size
+        
+        if math.isnan(energy):
+            energy = 0.0
             
-            unique_colors_count, pct = _count_colours(region)
-            # also get a greyscale version of the region for the other attributes
-            # (see paper by Evdoxios Baratis and Euripides G.M. Petrakis why this is)
+        # Number of shades of grey
+        int_hist = cv2.calcHist([r_grey], [0], None, [256], [0, 256]).flatten()
+        occupied_bins = np.count_nonzero(int_hist)
 
-            if (region.size == 0):
-                    continue
-            r_grey = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
-
-            # Image info
-            mean = np.mean(r_grey, axis = None)
-            std = np.std(r_grey, axis = None)
-            skew = ss.skew(r_grey, axis = None)
-            kurtosis = ss.kurtosis(r_grey, axis = None)
-            entropy = ss.entropy(r_grey, axis = None)
-
-            #Otsu threshold
-            otsu = 0
-            if invert:
-                otsu = cv2.threshold(r_grey, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[0]
-            else:
-                otsu = cv2.threshold(r_grey, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[0]
-
-            # Energy
-            _, (cH, cV, cD) = dwt2(r_grey.T, 'db1')
-            energy = (cH**2 + cV**2 + cD**2).sum()/r_grey.size
-            
-            if math.isnan(energy):
-                energy = 0.0
-                
-            # Number of shades of grey
-            int_hist = cv2.calcHist([r_grey], [0], None, [256], [0, 256]).flatten()
-            occupied_bins = np.count_nonzero(int_hist)
-
-            if len(hier) > 0:
-                regions.append((region, index, x, y, unique_colors_count, pct, hier[0][index], invert, mean, std, skew, kurtosis, entropy, otsu, energy, occupied_bins))
-            else:
-                regions.append((region, index, x, y, unique_colors_count, pct, [-2, -2, -2, -2], invert, mean, std, skew, kurtosis, entropy, otsu, energy, occupied_bins))
+        if len(hier) > 0:
+            regions.append((region, index, x, y, unique_colors_count, pct, hier[0][index], invert, mean, std, skew, kurtosis, entropy, otsu, energy, occupied_bins))
+        else:
+            regions.append((region, index, x, y, unique_colors_count, pct, [-2, -2, -2, -2], invert, mean, std, skew, kurtosis, entropy, otsu, energy, occupied_bins))
             
     return regions
 
